@@ -35,7 +35,10 @@ import math
 # get the folder location of this file!
 kThisFileLocation = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 kRootFolder = kThisFileLocation
-kDefaultConfigPath = os.path.join(kRootFolder,'config.yaml')
+import os
+config_file = os.environ.get('PYSLAM_CONFIG','config.yaml')
+# kDefaultConfigPath = os.path.join(kRootFolder,'config.yaml')
+kDefaultConfigPath = os.path.join(kRootFolder, config_file)
 kDefaultConfigLibsPath = os.path.join(kRootFolder,'config_libs.yaml')
 
 # Class for reading libs, dataset, system, and camera settings (from config.yaml) from yaml files.

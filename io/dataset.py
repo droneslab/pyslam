@@ -199,7 +199,8 @@ class VideoDataset(Dataset):
         self.fps = float(self.cap.get(cv2.CAP_PROP_FPS))
         self.Ts = 1.0 / self.fps if self.fps > 0 else 0 
         self.i = 0           
-        self.is_init = False           
+        self.is_init = False        
+        self.skip = 1   
         print(f"VideoDataset: {self.filename}")
         print(f"VideoDataset: Number of frames: {self.num_frames}, FPS: {self.fps}")            
             
