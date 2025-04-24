@@ -66,7 +66,7 @@ if global_plotting:
 use or not pangolin (if you want to use it then you need to install it by using the script install_thirdparty.sh)
 """
 if global_plotting:
-    kUsePangolin = True  
+    kUsePangolin = False  
     if platform.system() == 'Darwin':
         kUsePangolin = True # Under mac force pangolin to be used since Mplot3d() has some reliability issues                
     if kUsePangolin:

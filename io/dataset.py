@@ -492,9 +492,9 @@ class KittiDataset(Dataset):
 
             mask = np.logical_and(prob_map, std_map)
 
-            img_temp = img.copy()
-            img_temp[mask] = [0, 255, 0]
-            cv2.imwrite(f'/home/christoa/Developer/pixer/pyslam/nh_data/frame_{frame_id}.png', img_temp)
+            # img_temp = img.copy()
+            # img_temp[mask] = [0, 255, 0]
+            # cv2.imwrite(f'/home/moog-2/pixer/pyslam/nh_data/frame_{frame_id}.png', img_temp)
 
             # print(f'prob_mask: {prob_mask.shape}, std_mask: {std_mask.shape}, mask: {mask.shape}')
             # except:

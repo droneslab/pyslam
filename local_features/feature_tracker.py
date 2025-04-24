@@ -111,6 +111,7 @@ class FeatureTrackingResult(object):
         self.idxs_cur = None         # indices of matches in kps_cur so that kps_cur_matched = kps_cur[idxs_cur]  (numpy array of indexes)
         self.kps_ref_matched = None  # matched reference keypoints, kps_ref_matched = kps_ref[idxs_ref]
         self.kps_cur_matched = None  # matched current keypoints, kps_cur_matched = kps_cur[idxs_cur]
+        self.kps_cur_copy = None
 
 
 # Base class for a feature tracker.
@@ -289,10 +290,9 @@ class DescriptorFeatureTracker(FeatureTracker):
     def track(self, image_ref, image_cur, kps_ref, des_ref, mask=None):
         kps_cur, des_cur = self.detectAndCompute(image_cur)
 
-                
-
         # convert from list of keypoints to an array of points 
         kps_cur = np.array([x.pt for x in kps_cur], dtype=np.float32) 
+        kps_cur_copy = kps_cur.copy()  
         
         masks = []
         for i in range(len(kps_cur)):
@@ -318,11 +318,13 @@ class DescriptorFeatureTracker(FeatureTracker):
         idxs_ref, idxs_cur = matching_result.idxs1, matching_result.idxs2
         # print('num matches: ', len(matches))
         
+        
         res = FeatureTrackingResult()
         res.kps_ref = kps_ref  # all the reference keypoints  
         res.kps_cur = kps_cur  # all the current keypoints    
         res.des_ref = des_ref  # all the reference descriptors   
         res.des_cur = des_cur  # all the current descriptors         
+        res.kps_cur_copy = kps_cur_copy  # all the current keypoints copy (for debug purposes)
         
         res.kps_ref_matched = np.asarray(kps_ref[idxs_ref]) # the matched ref kps  
         res.idxs_ref = np.asarray(idxs_ref)                  
@@ -330,7 +332,7 @@ class DescriptorFeatureTracker(FeatureTracker):
         res.kps_cur_matched = np.asarray(kps_cur[idxs_cur]) # the matched cur kps  
         res.idxs_cur = np.asarray(idxs_cur)
         
-        return res                 
+        return res           
 
 
 # =======================================================

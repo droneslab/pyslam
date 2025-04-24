@@ -185,12 +185,17 @@ class VisualOdometryEducational(VisualOdometryBase):
                     except Exception as e:
                         print(f"Error at {i}, {j} {e}")
 
+        for i in self.track_result.kps_cur_copy:
+            col = int(i[0])
+            row = int(i[1])
+            cv2.circle(new_img, (col, row), 2, (255, 0, 0), -1)
+
         for i in self.kps_cur:
             col = int(i[0])
             row = int(i[1])
-            new_img[row][col] = [0, 0, 255]
+            cv2.circle(new_img, (col, row), 2, (0, 0, 255), -1)
 
-        cv2.imwrite(f'/home/christoa/Developer/pixer/pyslam/nh_data/res_{frame_id}.png', new_img)
+        cv2.imwrite(f'/home/moog-2/pixer/pyslam/nh_data/res_{frame_id}.png', new_img)
 
 
         self.num_matched_kps = self.kpn_ref.shape[0] 
