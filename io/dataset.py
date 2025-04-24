@@ -26,7 +26,7 @@ import glob
 import time 
 import csv
 import re 
-
+import torch
 from multiprocessing import Process, Queue, Value 
 from utils_sys import Printer
 from utils_serialization import SerializableEnum, register_class, SerializationJSON
@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from config import Config # Only imported when type checking, not at runtime
 
+import matplotlib.pyplot as plt
 
 kScriptPath = os.path.realpath(__file__)
 kScriptFolder = os.path.dirname(kScriptPath)
@@ -101,22 +102,22 @@ class Dataset(object):
                 Printer.yellow(f'Dataset end: {self.name}, path: {self.path}, frame id: {frame_id}')
                 self.is_ok = False
             return None
-        try: 
-            img = self.getImage(frame_id)
-            if img is None:
-                return None
-            if img.ndim == 2:
-                return cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)     
-            else:
-                return img             
-        except:
-            img = None
-            self.is_ok = False
-            if self.num_frames is not None and frame_id >= self.num_frames:
-                Printer.yellow(f'Dataset end: {self.name}, path: {self.path}, frame id: {frame_id}')
-            else:    
-                Printer.red(f'Cannot open dataset: {self.name}, path: {self.path}, frame id: {frame_id}')
-            return img    
+        # try: 
+        img,mask = self.getImage(frame_id)
+        if img is None:
+            return None
+        if img.ndim == 2:
+            return cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)     
+        else:
+            return img,mask             
+        # except:
+        #     img = None
+        #     self.is_ok = False
+        #     if self.num_frames is not None and frame_id >= self.num_frames:
+        #         Printer.yellow(f'Dataset end: {self.name}, path: {self.path}, frame id: {frame_id}')
+        #     else:    
+        #         Printer.red(f'Cannot open dataset: {self.name}, path: {self.path}, frame id: {frame_id}')
+        #     return img    
         
     # Adjust frame id with start frame id only here
     def getImageColorRight(self, frame_id):
@@ -301,11 +302,10 @@ class FolderDataset(Dataset):
             # read timestamps from timestamps file
             self._timestamp = float(self.timestamps[self.i])
             self._next_timestamp = float(self.timestamps[self.i + 1])
-
         elif pattern.search(image_file.split('/')[-1].split('.')[0]):
             # read timestamps from image filename
-            self._timestamp = float(image_file.split('/')[-1].split('.')[0])
-            self._next_timestamp = float(self.listing[self.i + 1].split('/')[-1].split('.')[0])
+            self._timestamp = float(image_file.split('/')[-1].split('.')[0].split('_')[-1])
+            self._next_timestamp = float(self.listing[self.i + 1].split('/')[-1].split('.')[0].split('_')[-1])
         else:
             self._timestamp += self.Ts
             self._next_timestamp = self._timestamp + self.Ts 
@@ -447,10 +447,14 @@ class KittiDataset(Dataset):
         if sensor_type == SensorType.STEREO:
             self.scale_viewer_3d = 1          
         self.image_left_path = '/image_0/'
-        self.image_right_path = '/image_1/'           
+        self.image_right_path = '/image_1/'
+        self.mask_path = '/mask/'        
         self.timestamps = np.loadtxt(self.path + '/sequences/' + str(self.name) + '/times.txt', dtype=np.float64)
         self.max_frame_id = len(self.timestamps)
         self.num_frames = self.max_frame_id
+        self.prob_thresh = 0.05
+        self.var_thresh = 0.01
+
         print('Processing KITTI Sequence of lenght: ', len(self.timestamps))
         
     def set_is_color(self,val):
@@ -468,12 +472,41 @@ class KittiDataset(Dataset):
                 self._timestamp = self.timestamps[frame_id]
             except:
                 print('could not retrieve image: ', frame_id, ' in path ', self.path )
+
+            # try:
+            mask_loc = os.path.join(self.path,'masks', 'mc_trials_50')
+            prob_file = os.path.join(mask_loc, f'{frame_id}_probs.npy')
+            std_file = os.path.join(mask_loc, f'{frame_id}_var.npy')
+            prob_mask = np.load(prob_file)
+            std_mask = np.load(std_file)
+
+
+            # get all probs greater than threshold
+            prob_map = np.where(prob_mask < self.prob_thresh, 1, 0)
+            std_map = np.where(std_mask > self.var_thresh, 1, 0)
+
+            # count number of true values in prob_map
+            prob_count = np.count_nonzero(prob_map)
+            std_count = np.count_nonzero(std_map)
+            # print(f'prob_count: {prob_count}, std_count: {std_count}')
+
+            mask = np.logical_and(prob_map, std_map)
+
+            img_temp = img.copy()
+            img_temp[mask] = [0, 255, 0]
+            cv2.imwrite(f'/home/christoa/Developer/pixer/pyslam/nh_data/frame_{frame_id}.png', img_temp)
+
+            # print(f'prob_mask: {prob_mask.shape}, std_mask: {std_mask.shape}, mask: {mask.shape}')
+            # except:
+            #     mask = None
+
+
             if frame_id+1 < self.max_frame_id:   
                 self._next_timestamp = self.timestamps[frame_id+1]
             else:
                 self._next_timestamp = self._timestamp + self.Ts             
         self.is_ok = (img is not None)
-        return img 
+        return img, mask 
 
     def getImageRight(self, frame_id):
         print(f'[KittiDataset] getImageRight: {frame_id}')

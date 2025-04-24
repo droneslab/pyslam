@@ -92,10 +92,10 @@ class VisualOdometryBase:
     def process_first_frame(self, frame_id) -> None:
         pass
 
-    def process_frame(self, frame_id) -> None:
+    def process_frame(self, frame_id, mask=None) -> None:
         pass
 
-    def track(self, img, depth, frame_id, timestamp) -> None:
+    def track(self, img, depth, frame_id, timestamp,mask=None) -> None:
         if kVerbose:
             print('..................................')
             print(f'frame: {frame_id}, timestamp: {timestamp}')       
@@ -107,7 +107,7 @@ class VisualOdometryBase:
         a,b,c,d,e,r,t = None, None, None, None, None, None, None
         # manage and check stage 
         if(self.state == VoState.GOT_FIRST_IMAGE):
-            a,b,c,d,e,r,t = self.process_frame(frame_id)
+            a,b,c,d,e,r,t = self.process_frame(frame_id,mask)
             self.update_history()   
         elif(self.state == VoState.NO_IMAGES_YET):
             d,e = self.process_first_frame(frame_id)

@@ -54,7 +54,7 @@ kScriptFolder = os.path.dirname(kScriptPath)
 kRootFolder = kScriptFolder
 kResultsFolder = kRootFolder + '/results'
 
-global_plotting = False
+global_plotting = True
 
 kUseRerun = True
 # check rerun does not have issues 
@@ -94,7 +94,7 @@ def factory_plot2d(*args,**kwargs):
         return Mplot2d(*args,**kwargs)
     
 
-def run_exp(name, feature, max_images=10):
+def run_exp(name, feature, max_images=10, baseline=False):
     config_loc = os.environ.get('PYSLAM_CONFIG')
     config_name = config_loc.split('.')[0]
     config = Config()
@@ -174,12 +174,14 @@ def run_exp(name, feature, max_images=10):
 
         if dataset.isOk():
             timestamp = dataset.getTimestamp()          # get current timestamp 
-            img = dataset.getImageColor(img_id)
+            img, mask = dataset.getImageColor(img_id)
             depth = dataset.getDepth(img_id)
+            if baseline:
+                mask = None
 
         if img is not None:
             images.append(img)
-            matched_kp, num_inlier, px_shift, kp_cur, des_cur,rot,trans = vo.track(img, depth, img_id, timestamp)  # main VO function 
+            matched_kp, num_inlier, px_shift, kp_cur, des_cur,rot,trans = vo.track(img, depth, img_id, timestamp, mask=mask)  # main VO function 
             if matched_kp is not None:
                 matched_kps.append(matched_kp)
                 num_inliers.append(num_inlier)
@@ -270,23 +272,26 @@ def run_exp(name, feature, max_images=10):
     #print('press a key in order to exit...')
     #cv2.waitKey(0)
     if global_plotting:
-        if is_draw_traj_img:
-            if not os.path.exists(kResultsFolder):
-                os.makedirs(kResultsFolder, exist_ok=True)
-            print(f'saving {kResultsFolder}/map.png')
-            cv2.imwrite(f'{kResultsFolder}/map.png', traj_img)
-        if is_draw_3d:
-            if not kUsePangolin:
-                plt3d.quit()
-            else: 
-                viewer3D.quit()
-        if is_draw_err:
-            err_plt.quit()
-        if is_draw_matched_points is not None:
-            matched_points_plt.quit()
-                    
-        cv2.destroyAllWindows()
-
+        try:
+            if is_draw_traj_img:
+                if not os.path.exists(kResultsFolder):
+                    os.makedirs(kResultsFolder, exist_ok=True)
+                print(f'saving {kResultsFolder}/map.png')
+                cv2.imwrite(f'{kResultsFolder}/map.png', traj_img)
+            if is_draw_3d:
+                if not kUsePangolin:
+                    plt3d.quit()
+                else: 
+                    viewer3D.quit()
+            if is_draw_err:
+                err_plt.quit()
+            if is_draw_matched_points is not None:
+                matched_points_plt.quit()
+                        
+            cv2.destroyAllWindows()
+        except Exception as e:
+            print(f'Error in closing windows: {e}')
+            pass
 
 
     idxs = range(len(matched_kps))
@@ -405,12 +410,12 @@ def run_exp(name, feature, max_images=10):
 if __name__ == "__main__":
     # set PYSLAM_CONFIG environment variable to the path of the settings file
     feature_dict = {
-        "LK_SHI_TOMASI": FeatureTrackerConfigs.LK_SHI_TOMASI,
+        # "LK_SHI_TOMASI": FeatureTrackerConfigs.LK_SHI_TOMASI,
         # "LK_FAST": FeatureTrackerConfigs.LK_FAST,
         # "ORB": FeatureTrackerConfigs.ORB,
         # "BRISK": FeatureTrackerConfigs.BRISK,
         # "AKAZE": FeatureTrackerConfigs.AKAZE,
-        # "SIFT": FeatureTrackerConfigs.SIFT,
+        "SIFT": FeatureTrackerConfigs.SIFT,
         # "SUPERPOINT": FeatureTrackerConfigs.SUPERPOINT,
         # "R2D2": FeatureTrackerConfigs.R2D2
     }

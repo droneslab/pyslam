@@ -286,14 +286,37 @@ class DescriptorFeatureTracker(FeatureTracker):
 
 
     # out: FeatureTrackingResult()
-    def track(self, image_ref, image_cur, kps_ref, des_ref):
+    def track(self, image_ref, image_cur, kps_ref, des_ref, mask=None):
         kps_cur, des_cur = self.detectAndCompute(image_cur)
+
+                
+
         # convert from list of keypoints to an array of points 
         kps_cur = np.array([x.pt for x in kps_cur], dtype=np.float32) 
+        
+        masks = []
+        for i in range(len(kps_cur)):
+            py,px = kps_cur[i]
+            px = int(px)
+            py = int(py)
+            if mask[px,py] == False:
+                masks.append(True)
+            else:
+                masks.append(False)
+        kps_cur = kps_cur[masks]
+        des_cur = des_cur[masks]
         # Printer.orange(des_ref.shape)
+        # print(f'''
+        # image_ref.shape: {image_ref.shape}
+        # image_cur.shape: {image_cur.shape}
+        # kps_ref.shape: {kps_ref.shape}
+        # kps_cur.shape: {kps_cur.shape}
+        # des_ref.shape: {len(des_ref)}
+        # des_cur.shape: {len(des_cur)}
+        #       ''')
         matching_result = self.matcher.match(image_ref, image_cur, des1=des_ref, des2=des_cur, kps1=kps_ref, kps2=kps_cur)  #knnMatch(queryDescriptors,trainDescriptors)
         idxs_ref, idxs_cur = matching_result.idxs1, matching_result.idxs2
-        #print('num matches: ', len(matches))
+        # print('num matches: ', len(matches))
         
         res = FeatureTrackingResult()
         res.kps_ref = kps_ref  # all the reference keypoints  

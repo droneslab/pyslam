@@ -125,7 +125,7 @@ class VisualOdometryEducational(VisualOdometryBase):
         print(f'num inliers in pose estimation: {self.pose_estimation_inliers}')
         return R,t  # Rrc, trc (with respect to 'ref' frame) 		
 
-    def process_first_frame(self, frame_id) -> None:
+    def process_first_frame(self, frame_id, mask=None) -> None:
         # convert image to gray if needed    
         if self.cur_image.ndim>2:
             self.cur_image = cv2.cvtColor(self.cur_image,cv2.COLOR_RGB2GRAY)                
@@ -135,14 +135,32 @@ class VisualOdometryEducational(VisualOdometryBase):
         self.kps_ref = np.array([x.pt for x in self.kps_ref], dtype=np.float32) if self.kps_ref is not None else None
         self.draw_img = self.drawFeatureTracks(self.cur_image)
         return self.kps_ref, self.des_ref
+    
+    def filterKPS(self, kps, mask):
+        mask_idxs = []
+        for i in kps:
+            col = int(i[0])
+            row = int(i[1])
+            if mask[row][col]==True:
+                mask_idxs.append(False)
+            else:
+                mask_idxs.append(True)
+        return mask_idxs
 
-    def process_frame(self, frame_id) -> None:
+    def process_frame(self, frame_id, mask=None) -> None:
         # convert image to gray if needed    
         if self.cur_image.ndim>2:
             self.cur_image = cv2.cvtColor(self.cur_image,cv2.COLOR_RGB2GRAY)                
         # track features 
         self.timer_feat.start()
-        self.track_result = self.feature_tracker.track(self.prev_image, self.cur_image, self.kps_ref, self.des_ref)
+
+        # if mask is not None:
+        #     kmask = self.filterKPS(self.kps_ref, mask)
+        #     print(f"KP before filtering: {self.kps_ref.shape[0]}")
+        #     self.kps_ref = self.kps_ref[kmask]
+        #     print(f"KP after filtering: {self.kps_ref.shape[0]}")
+
+        self.track_result = self.feature_tracker.track(self.prev_image, self.cur_image, self.kps_ref, self.des_ref, mask)
         self.timer_feat.refresh()
         # estimate pose 
         self.timer_pose_est.start()
@@ -152,6 +170,29 @@ class VisualOdometryEducational(VisualOdometryBase):
         self.kps_ref = self.track_result.kps_ref
         self.kps_cur = self.track_result.kps_cur
         self.des_cur = self.track_result.des_cur 
+
+        # draw mask as green and kps as red
+        new_img = self.cur_image.copy()
+        new_img = cv2.cvtColor(new_img, cv2.COLOR_GRAY2RGB)
+        if mask is not None:
+            for i in range(mask.shape[0]):
+                for j in range(mask.shape[1]):
+                    try:
+                        if mask[i][j] == True:
+                            new_img[i][j] = [0, 255, 0]
+                        else:
+                            pass
+                    except Exception as e:
+                        print(f"Error at {i}, {j} {e}")
+
+        for i in self.kps_cur:
+            col = int(i[0])
+            row = int(i[1])
+            new_img[row][col] = [0, 0, 255]
+
+        cv2.imwrite(f'/home/christoa/Developer/pixer/pyslam/nh_data/res_{frame_id}.png', new_img)
+
+
         self.num_matched_kps = self.kpn_ref.shape[0] 
         self.num_inliers =  np.sum(self.mask_match)
         #compute average delta pixel shift
