@@ -293,18 +293,18 @@ class DescriptorFeatureTracker(FeatureTracker):
         # convert from list of keypoints to an array of points 
         kps_cur = np.array([x.pt for x in kps_cur], dtype=np.float32) 
         kps_cur_copy = kps_cur.copy()  
-        
-        masks = []
-        for i in range(len(kps_cur)):
-            py,px = kps_cur[i]
-            px = int(px)
-            py = int(py)
-            if mask[px,py] == False:
-                masks.append(True)
-            else:
-                masks.append(False)
-        kps_cur = kps_cur[masks]
-        des_cur = des_cur[masks]
+        if mask is not None:
+            masks = []
+            for i in range(len(kps_cur)):
+                py,px = kps_cur[i]
+                px = int(px)
+                py = int(py)
+                if mask[px,py] == False:
+                    masks.append(True)
+                else:
+                    masks.append(False)
+            kps_cur = kps_cur[masks]
+            des_cur = des_cur[masks]
         # Printer.orange(des_ref.shape)
         # print(f'''
         # image_ref.shape: {image_ref.shape}

@@ -94,12 +94,15 @@ def factory_plot2d(*args,**kwargs):
         return Mplot2d(*args,**kwargs)
     
 
-def run_exp(name, feature, max_images=10, baseline=False):
+def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=False):
     config_loc = os.environ.get('PYSLAM_CONFIG')
     config_name = config_loc.split('.')[0]
     config = Config()
+
+    exp_name = f'{config_name}_{name}_{"baseline" if baseline else "masked"}'
     
     dataset = dataset_factory(config)
+    setattr(dataset, 'skip', 1)
 
     groundtruth = groundtruth_factory(config.dataset_settings)
 
@@ -117,12 +120,17 @@ def run_exp(name, feature, max_images=10, baseline=False):
    
     feature_tracker = feature_tracker_factory(**tracker_config)
 
+    if save_intermediate:
+        save_loc = os.path.join(kScriptFolder,'nh_data')
+    else:
+        save_loc = None
+
     # create visual odometry object 
     if dataset.sensor_type == SensorType.RGBD:
         vo = VisualOdometryRgbdTensor(cam, groundtruth)  # only for RGBD
         Printer.green('Using VisualOdometryRgbdTensor')
     else:
-        vo = VisualOdometryEducational(cam, groundtruth, feature_tracker)
+        vo = VisualOdometryEducational(cam, groundtruth, feature_tracker,save_loc=save_loc)
         Printer.green('Using VisualOdometryEducational')
     time.sleep(1) # time to read the message
     if global_plotting:
@@ -180,9 +188,9 @@ def run_exp(name, feature, max_images=10, baseline=False):
                 mask = None
 
         if img is not None:
-            images.append(img)
             matched_kp, num_inlier, px_shift, kp_cur, des_cur,rot,trans = vo.track(img, depth, img_id, timestamp, mask=mask)  # main VO function 
             if matched_kp is not None:
+                images.append(img)
                 matched_kps.append(matched_kp)
                 num_inliers.append(num_inlier)
                 px_shifts.append(px_shift)
@@ -394,14 +402,14 @@ def run_exp(name, feature, max_images=10, baseline=False):
     plt.ylabel('Frame ID')
     plt.title(f'Feature Tracks Over Multiple Frames - {name}')
     plt.gca().invert_yaxis() 
-    plt.savefig(f'nh_data/nighthawk_{config_name}_{name}_tracks.png')
+    plt.savefig(f'nh_data/{exp_name}_tracks.png')
     plt.close()
 
-    with open(f'nh_data/nighthawk_{config_name}_{name}_tracks.pkl', 'wb') as f:
+    with open(f'nh_data/{exp_name}_tracks.pkl', 'wb') as f:
         pickle.dump(tracks, f)
 
     # write csv
-    with open(f'nh_data/nighthawk_{config_name}_{name}.csv', 'w') as f:
+    with open(f'nh_data/{exp_name}.csv', 'w') as f:
         f.write('frame_id,matched_kps,num_inliers,px_shifts\n')
         for i in range(len(matched_kps)):
             f.write(f'{i*dataset.skip},{matched_kps[i]},{num_inliers[i]},{px_shifts[i]}\n')
@@ -409,21 +417,47 @@ def run_exp(name, feature, max_images=10, baseline=False):
 
 if __name__ == "__main__":
     # set PYSLAM_CONFIG environment variable to the path of the settings file
-    feature_dict = {
-        # "LK_SHI_TOMASI": FeatureTrackerConfigs.LK_SHI_TOMASI,
-        # "LK_FAST": FeatureTrackerConfigs.LK_FAST,
-        # "ORB": FeatureTrackerConfigs.ORB,
-        # "BRISK": FeatureTrackerConfigs.BRISK,
-        # "AKAZE": FeatureTrackerConfigs.AKAZE,
-        "SIFT": FeatureTrackerConfigs.SIFT,
-        # "SUPERPOINT": FeatureTrackerConfigs.SUPERPOINT,
-        # "R2D2": FeatureTrackerConfigs.R2D2
-    }
-    for key,val in feature_dict.items():
-        # try:
-        run_exp(key,val,70)
-        # except Exception as e:
-        #     print(f'Error in {key}: {e}')
-        #     pass
+    # feature_dict = {
+    #     # "LK_SHI_TOMASI": FeatureTrackerConfigs.LK_SHI_TOMASI,
+    #     # "LK_FAST": FeatureTrackerConfigs.LK_FAST,
+    #     # "ORB": FeatureTrackerConfigs.ORB,
+    #     # "BRISK": FeatureTrackerConfigs.BRISK,
+    #     # "AKAZE": FeatureTrackerConfigs.AKAZE,
+    #     "SIFT": FeatureTrackerConfigs.SIFT,
+    #     # "SUPERPOINT": FeatureTrackerConfigs.SUPERPOINT,
+    #     # "R2D2": FeatureTrackerConfigs.R2D2
+    # }
+    # for key,val in feature_dict.items():
+    #     # try:
+    #     run_exp(key,val,70)
+    #     # except Exception as e:
+    #     #     print(f'Error in {key}: {e}')
+    #     #     pass
 
+    features = [
+        # ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
+        # ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
+        # ['ORB', FeatureTrackerConfigs.ORB],
+        # ['BRISK', FeatureTrackerConfigs.BRISK],
+        # ['AKAZE', FeatureTrackerConfigs.AKAZE],
+        ['SIFT', FeatureTrackerConfigs.SIFT],
+        # ['SUPERPOINT', FeatureTrackerConfigs.SUPERPOINT],
+        # ['R2D2', FeatureTrackerConfigs.R2D2],
+        # ['LIGHTGLUE', FeatureTrackerConfigs.LIGHTGLUE],
+        # ['XFEAT', FeatureTrackerConfigs.XFEAT],
+        # ['XFEAT_XFEAT', FeatureTrackerConfigs.XFEAT_XFEAT],
+        # ['LOFTR', FeatureTrackerConfigs.LOFTR]
+    ]
+    baselines = [
+        False,
+        True,
+    ]
+
+    for f in features:
+        for baseline in baselines:
+            # try:
+            run_exp(f[0], f[1], 20, baseline)
+            # except Exception as e:
+            #     print(f'Error in {f[0]}: {e}')
+            #     pass
     

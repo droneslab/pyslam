@@ -25,7 +25,7 @@ from feature_tracker import FeatureTrackerTypes, FeatureTrackingResult, FeatureT
 from utils_geom import poseRt, is_rotation_matrix, closest_rotation_matrix
 from timer import TimerFps
 from ground_truth import GroundTruth
-
+import os
 from visual_odometry_base import VoState, VisualOdometryBase
 
 
@@ -50,13 +50,14 @@ kAbsoluteScaleThresholdIndoor = 0.015          # absolute translation scale; it 
 # With this very basic approach, you need to use a ground truth in order to recover a reasonable inter-frame scale $s$ and estimate a 
 # valid trajectory by composing $C_k = C_{k-1} * [R_{k-1,k}, s t_{k-1,k}]$. 
 class VisualOdometryEducational(VisualOdometryBase):
-    def __init__(self, cam: Camera, groundtruth: GroundTruth, feature_tracker: FeatureTracker):
+    def __init__(self, cam: Camera, groundtruth: GroundTruth, feature_tracker: FeatureTracker, save_loc=None):
         super().__init__(cam=cam, groundtruth=groundtruth)      
         
         self.kps_ref = None  # reference keypoints 
         self.des_ref = None # refeference descriptors 
         self.kps_cur = None  # current keypoints 
         self.des_cur = None # current descriptors 
+        self.save_loc = save_loc
             
         self.feature_tracker = feature_tracker  # type: FeatureTracker
         
@@ -148,7 +149,7 @@ class VisualOdometryEducational(VisualOdometryBase):
         return mask_idxs
 
     def process_frame(self, frame_id, mask=None) -> None:
-        # convert image to gray if needed    
+        # convert image to gray if needed   
         if self.cur_image.ndim>2:
             self.cur_image = cv2.cvtColor(self.cur_image,cv2.COLOR_RGB2GRAY)                
         # track features 
@@ -174,7 +175,7 @@ class VisualOdometryEducational(VisualOdometryBase):
         # draw mask as green and kps as red
         new_img = self.cur_image.copy()
         new_img = cv2.cvtColor(new_img, cv2.COLOR_GRAY2RGB)
-        if mask is not None:
+        if mask is not None and self.save_loc is not None:
             for i in range(mask.shape[0]):
                 for j in range(mask.shape[1]):
                     try:
@@ -185,17 +186,18 @@ class VisualOdometryEducational(VisualOdometryBase):
                     except Exception as e:
                         print(f"Error at {i}, {j} {e}")
 
-        for i in self.track_result.kps_cur_copy:
-            col = int(i[0])
-            row = int(i[1])
-            cv2.circle(new_img, (col, row), 2, (255, 0, 0), -1)
+            for i in self.track_result.kps_cur_copy:
+                col = int(i[0])
+                row = int(i[1])
+                cv2.circle(new_img, (col, row), 2, (255, 0, 0), -1)
 
-        for i in self.kps_cur:
-            col = int(i[0])
-            row = int(i[1])
-            cv2.circle(new_img, (col, row), 2, (0, 0, 255), -1)
+            for i in self.kps_cur:
+                col = int(i[0])
+                row = int(i[1])
+                cv2.circle(new_img, (col, row), 2, (0, 0, 255), -1)
 
-        cv2.imwrite(f'/home/moog-2/pixer/pyslam/nh_data/res_{frame_id}.png', new_img)
+            res_file = os.path.join(self.save_loc, f'res_{frame_id}.png')
+            cv2.imwrite(res_file, new_img)
 
 
         self.num_matched_kps = self.kpn_ref.shape[0] 
