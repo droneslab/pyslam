@@ -27,6 +27,7 @@ from timer import TimerFps
 from ground_truth import GroundTruth
 import os
 from visual_odometry_base import VoState, VisualOdometryBase
+import time
 
 
 kVerbose=True     
@@ -165,7 +166,10 @@ class VisualOdometryEducational(VisualOdometryBase):
         self.timer_feat.refresh()
         # estimate pose 
         self.timer_pose_est.start()
-        R, t = self.estimatePose(self.track_result.kps_ref_matched, self.track_result.kps_cur_matched)     
+        est_start = time.perf_counter()
+        R, t = self.estimatePose(self.track_result.kps_ref_matched, self.track_result.kps_cur_matched)  
+        est_end = time.perf_counter()   
+        total_est_time = est_end - est_start
         self.timer_pose_est.refresh()
         # update keypoints history  
         self.kps_ref = self.track_result.kps_ref
@@ -191,7 +195,7 @@ class VisualOdometryEducational(VisualOdometryBase):
                     col = int(i[0])
                     row = int(i[1])
                     cv2.circle(new_img, (col, row), 2, (0, 0, 255), -1)
-                    
+
             if self.track_result.kps_after_mask is not None:
                 for i in self.track_result.kps_after_mask:
                     col = int(i[0])
@@ -238,7 +242,7 @@ class VisualOdometryEducational(VisualOdometryBase):
                 print('# new detected points: ', self.kps_cur.shape[0])                  
         self.kps_ref = self.kps_cur
         self.des_ref = self.des_cur
-        return self.num_matched_kps, self.num_inliers, self.average_pixel_shift, self.kpn_cur, self.des_cur, R, t
+        return self.num_matched_kps, self.num_inliers, self.average_pixel_shift, self.kpn_cur, self.des_cur, R, t, self.track_result.kps_before_mask, self.track_result.kps_after_mask, total_est_time
         
 
     def drawFeatureTracks(self, img, reinit = False):
