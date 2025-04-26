@@ -497,7 +497,7 @@ class KittiDataset(Dataset):
 
             # img_temp = img.copy()
             # img_temp[mask] = [0, 255, 0]
-            # cv2.imwrite(f'/home/moog-2/pixer/pyslam/nh_data/frame_{frame_id}.png', img_temp)
+            # cv2.imwrite(f'/home/moog-2/pixer/pyslam/{kResultsFolder}/frame_{frame_id}.png', img_temp)
 
             # print(f'prob_mask: {prob_mask.shape}, std_mask: {std_mask.shape}, mask: {mask.shape}')
             # except:

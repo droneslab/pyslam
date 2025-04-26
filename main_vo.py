@@ -93,16 +93,187 @@ def factory_plot2d(*args,**kwargs):
     else:
         return Mplot2d(*args,**kwargs)
     
-def process_data(results: dict):
-    pass
+def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_traj=True, traj_skips=1):
+
+    exp_name = results['exp_name']
+    name = results['feature_name']
+    matched_kps = results['matched_kps']
+    num_inliers = results['num_inliers']
+    px_shifts = results['px_shifts']
+    dataset_skip = results['dataset_skip']
+    rs = results['rs']
+    ts = results['ts']
+    kps = results['kps']
+    des = results['des']        
+    original_kps = results['original_kps']
+    masked_kps = results['masked_kps']
+    xs = results['xs']
+    ys = results['ys']
+    zs = results['zs']
+    gtxs = results['gtxs']
+    gtys = results['gtys']
+    gtzs = results['gtzs']
+    est_times = results['est_times']
+
+    print_str = f'''
+        matched_kps: {np.mean(matched_kps)}
+        num_inliers: {np.mean(num_inliers)}
+        px_shifts: {np.mean(px_shifts)}
+        rs: {len(rs)}
+        ts: {len(ts)}
+        xs: {len(xs)}
+        ys: {len(ys)}
+        zs: {len(zs)}
+        gtxs: {len(gtxs)}
+        gtys: {len(gtys)}
+        gtzs: {len(gtzs)}
+        kps: {len(kps)}
+        des: {len(des)}
+        images: {len(images)}
+        masks: {len(masks)},
+        original_kps: {np.sum([len(kp) for kp in original_kps])/len(original_kps)}
+        masked_kps: {np.sum([len(kp) for kp in masked_kps])/len(masked_kps)}
+        est_times: {np.sum(est_times)/len(est_times)}
+            '''
+    print(print_str)
+    with open(f'{kResultsFolder}/{exp_name}_stats.txt', 'w') as f:
+        f.write(print_str)
+
+    if draw_tracks:
+        idxs = range(len(matched_kps))
+        idxs = [i*dataset_skip for i in idxs]
+        fig, ax = plt.subplots(2,1)
+        ax[0].plot(idxs, matched_kps, label='matched_kps')
+        ax[0].plot(idxs, num_inliers, label='num_inliers')
+        ax[0].legend()
+        ax[1].plot(idxs, px_shifts, label='px_shifts')
+        ax[1].legend()
+        plt.savefig(f'{kResultsFolder}/{exp_name}_kp_inliers.png')
+        plt.close()
+
+        # Initialize an empty list to store matches between consecutive frames
+        matches_list = []
+
+        # Loop over consecutive pairs of frames
+        for i in range(len(des) - 1):
+            des1 = des[i]
+            des2 = des[i + 1]
+
+            # If either descriptor is None, we simply append an empty match list
+            if des1 is None or des2 is None:
+                matches = []
+            else:
+                # Match features using BFMatcher and sort the matches based on distance
+                matches = bf.match(des1, des2)
+                matches = sorted(matches, key=lambda x: x.distance)
+            
+            # Append the matches corresponding to frame i (matched with frame i+1)
+            matches_list.append(matches)
+
+        tracks = {}
+        next_track_id = 0
+
+        for i in range(len(des)):
+            if des[i] is not None and des[i].dtype != np.float32:
+                des[i] = des[i].astype(np.float32)
+
+        # Process each frame as a starting point
+        for start_frame in tqdm(range(len(images) - 1)):
+            # Initialize new tracks for features in this frame
+            current_features = {i: next_track_id + i for i in range(len(kps[start_frame]))}
+            
+            # Add new features to tracks
+            for i in range(len(kps[start_frame])):
+                tracks[next_track_id + i] = [(start_frame, i)]
+            
+            next_track_id += len(kps[start_frame])
+
+            # Track these features in subsequent frames
+            prev_descriptors = des[start_frame]
+            prev_features = current_features
+
+            if prev_descriptors is None:
+                continue  # Skip frames without descriptors
+
+            for frame_idx in range(start_frame + 1, len(images)):
+                current_descriptors = des[frame_idx]
+
+                if current_descriptors is None:
+                    continue  # Skip frames without descriptors
+
+                # Ensure descriptors are of the same type
+                if prev_descriptors.dtype != np.float32:
+                    prev_descriptors = prev_descriptors.astype(np.float32)
+                if current_descriptors.dtype != np.float32:
+                    current_descriptors = current_descriptors.astype(np.float32)
+
+                matches = bf.knnMatch(prev_descriptors, current_descriptors, k=2)
+
+                # Apply Lowe’s ratio test
+                good_matches = []
+                for match in matches:
+                    if len(match) >= 2:
+                        m, n = match[:2]
+                        if m.distance < 0.75 * n.distance:
+                            good_matches.append(m)
+
+                # Update tracks with good matches
+                new_features = {}
+                for match in good_matches:
+                    query_idx = match.queryIdx  # Previous frame feature
+                    train_idx = match.trainIdx  # Current frame feature
+                    
+                    if query_idx in prev_features:
+                        track_id = prev_features[query_idx]
+                        tracks[track_id].append((frame_idx, train_idx))
+                        new_features[train_idx] = track_id  # Carry forward to next frame
+
+                # Prepare for the next frame
+                prev_descriptors = current_descriptors
+                prev_features = new_features
+
+        plt.figure(figsize=(24, 12))
+        for track_id, track in tqdm(tracks.items()):
+            frames = [f for f, _ in track]
+            plt.plot([track_id] * len(frames), frames, marker='o', linestyle='-', lw=0.05)
+
+
+        plt.xlabel('Feature Track ID ')
+        plt.ylabel('Frame ID')
+        plt.title(f'Feature Tracks Over Multiple Frames - {name}')
+        plt.gca().invert_yaxis() 
+        plt.savefig(f'{kResultsFolder}/{exp_name}_tracks.png')
+        plt.close()
+
+        with open(f'{kResultsFolder}/{exp_name}_tracks.pkl', 'wb') as f:
+            pickle.dump(tracks, f)
+
+        
+
+    if plot_traj:
+        xs_p = xs[::traj_skips]
+        zs_p = zs[::traj_skips]
+        gtxs_p = gtxs[::traj_skips]
+        gtzs_p = gtzs[::traj_skips]
+        plt.plot(xs_p, zs_p, c='r', marker='o', label='estimated')
+        plt.plot(gtxs_p, gtzs_p, c='b', marker='x', label='ground truth')
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.xlabel('x (m)')
+        plt.ylabel('y (m)')
+        plt.title(f'2D Trajectory - {name}')
+        plt.legend()
+        plt.savefig(f"{kResultsFolder}/{exp_name}_2d.png")
+        plt.close()
+
+    return
     
 
-def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=False):
+def run_exp(name, feature, feature_num=2000, max_images=10, baseline=False, save_intermediate=False, plot_tracks=False, plot_traj=True):
     config_loc = os.environ.get('PYSLAM_CONFIG')
     config_name = config_loc.split('.')[0]
     config = Config()
 
-    exp_name = f'{config_name}_{name}_{"baseline" if baseline else "masked"}'
+    exp_name = f'{config_name}_{name}_{feature_num}_{"baseline" if baseline else "masked"}'
     
     dataset = dataset_factory(config)
     setattr(dataset, 'skip', 1)
@@ -111,9 +282,9 @@ def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=Fals
 
     cam = PinholeCamera(config)
 
-    num_features=2000  # how many features do you want to detect and track?
-    if config.num_features_to_extract > 0:  # override the number of features to extract if we set something in the settings file
-        num_features = config.num_features_to_extract
+    num_features=feature_num  # how many features do you want to detect and track?
+    # if config.num_features_to_extract > 0:  # override the number of features to extract if we set something in the settings file
+    #     num_features = config.num_features_to_extract
         
     # select your tracker configuration (see the file feature_tracker_configs.py) 
     # LK_SHI_TOMASI, LK_FAST
@@ -124,7 +295,7 @@ def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=Fals
     feature_tracker = feature_tracker_factory(**tracker_config)
 
     if save_intermediate:
-        save_loc = os.path.join(kScriptFolder,'nh_data')
+        save_loc = kResultsFolder
     else:
         save_loc = None
 
@@ -320,156 +491,35 @@ def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=Fals
         except Exception as e:
             print(f'Error in closing windows: {e}')
             pass
+    
+    results = {
+        'exp_name': exp_name,
+        'feature_name': name,
+        'dataset_skip': dataset.skip,
+        'matched_kps': matched_kps,
+        'num_inliers': num_inliers,
+        'px_shifts': px_shifts,
+        'rs': rs,
+        'ts': ts,
+        'kps': kps,
+        'des': des,
+        'xs': xs,
+        'ys': ys,
+        'zs': zs,
+        'gtxs': gtxs,
+        'gtys': gtys,
+        'gtzs': gtzs,
+        'original_kps': original_kps,
+        'masked_kps': masked_kps,
+        'est_times': est_times,
+    }
 
+    with open(f'{kResultsFolder}/{exp_name}.pkl', 'wb') as f:
+        pickle.dump(results, f)
 
-    idxs = range(len(matched_kps))
-    idxs = [i*dataset.skip for i in idxs]
-    fig, ax = plt.subplots(2,1)
-    ax[0].plot(idxs, matched_kps, label='matched_kps')
-    ax[0].plot(idxs, num_inliers, label='num_inliers')
-    ax[0].legend()
-    ax[1].plot(idxs, px_shifts, label='px_shifts')
-    ax[1].legend()
+    process_data(results, images=images, masks=images, draw_tracks=plot_tracks, plot_traj=plot_traj, traj_skips=5)
 
-    # Initialize an empty list to store matches between consecutive frames
-    matches_list = []
-
-    # Loop over consecutive pairs of frames
-    for i in range(len(des) - 1):
-        des1 = des[i]
-        des2 = des[i + 1]
-
-        # If either descriptor is None, we simply append an empty match list
-        if des1 is None or des2 is None:
-            matches = []
-        else:
-            # Match features using BFMatcher and sort the matches based on distance
-            matches = bf.match(des1, des2)
-            matches = sorted(matches, key=lambda x: x.distance)
-        
-        # Append the matches corresponding to frame i (matched with frame i+1)
-        matches_list.append(matches)
-
-    tracks = {}
-    next_track_id = 0
-
-    for i in range(len(des)):
-        if des[i] is not None and des[i].dtype != np.float32:
-            des[i] = des[i].astype(np.float32)
-
-    # Process each frame as a starting point
-    for start_frame in tqdm(range(len(images) - 1)):
-        # Initialize new tracks for features in this frame
-        current_features = {i: next_track_id + i for i in range(len(kps[start_frame]))}
-        
-        # Add new features to tracks
-        for i in range(len(kps[start_frame])):
-            tracks[next_track_id + i] = [(start_frame, i)]
-        
-        next_track_id += len(kps[start_frame])
-
-        # Track these features in subsequent frames
-        prev_descriptors = des[start_frame]
-        prev_features = current_features
-
-        if prev_descriptors is None:
-            continue  # Skip frames without descriptors
-
-        for frame_idx in range(start_frame + 1, len(images)):
-            current_descriptors = des[frame_idx]
-
-            if current_descriptors is None:
-                continue  # Skip frames without descriptors
-
-            # Ensure descriptors are of the same type
-            if prev_descriptors.dtype != np.float32:
-                prev_descriptors = prev_descriptors.astype(np.float32)
-            if current_descriptors.dtype != np.float32:
-                current_descriptors = current_descriptors.astype(np.float32)
-
-            matches = bf.knnMatch(prev_descriptors, current_descriptors, k=2)
-
-            # Apply Lowe’s ratio test
-            good_matches = []
-            for match in matches:
-                if len(match) >= 2:
-                    m, n = match[:2]
-                    if m.distance < 0.75 * n.distance:
-                        good_matches.append(m)
-
-            # Update tracks with good matches
-            new_features = {}
-            for match in good_matches:
-                query_idx = match.queryIdx  # Previous frame feature
-                train_idx = match.trainIdx  # Current frame feature
-                
-                if query_idx in prev_features:
-                    track_id = prev_features[query_idx]
-                    tracks[track_id].append((frame_idx, train_idx))
-                    new_features[train_idx] = track_id  # Carry forward to next frame
-
-            # Prepare for the next frame
-            prev_descriptors = current_descriptors
-            prev_features = new_features
-
-    plt.figure(figsize=(24, 12))
-    for track_id, track in tqdm(tracks.items()):
-        frames = [f for f, _ in track]
-        plt.plot([track_id] * len(frames), frames, marker='o', linestyle='-', lw=0.05)
-
-
-    plt.xlabel('Feature Track ID ')
-    plt.ylabel('Frame ID')
-    plt.title(f'Feature Tracks Over Multiple Frames - {name}')
-    plt.gca().invert_yaxis() 
-    plt.savefig(f'nh_data/{exp_name}_tracks.png')
-    plt.close()
-
-    with open(f'nh_data/{exp_name}_tracks.pkl', 'wb') as f:
-        pickle.dump(tracks, f)
-
-    print(f'''
-    matched_kps: {len(matched_kps)}
-    num_inliers: {len(num_inliers)}
-    px_shifts: {len(px_shifts)}
-    rs: {len(rs)}
-    ts: {len(ts)}
-    xs: {len(xs)}
-    ys: {len(ys)}
-    zs: {len(zs)}
-    gtxs: {len(gtxs)}
-    gtys: {len(gtys)}
-    gtzs: {len(gtzs)}
-    kps: {len(kps)}
-    des: {len(des)}
-    images: {len(images)}
-    masks: {len(masks)},
-    original_kps: {np.sum([len(kp) for kp in original_kps])/len(original_kps)}
-    masked_kps: {np.sum([len(kp) for kp in masked_kps])/len(masked_kps)}
-          ''')
-
-    # write csv
-    with open(f'nh_data/{exp_name}.csv', 'w') as f:
-        f.write('frame_id,matched_kps,num_inliers,px_shifts,cx,cy,cz,gx,gy,gz\n')
-        for i in range(len(matched_kps)):
-            # f.write(f'{i*dataset.skip},{matched_kps[i]},{num_inliers[i]},{px_shifts[i]}\n')
-            f.write(f'{i*dataset.skip},{matched_kps[i]},{num_inliers[i]},{px_shifts[i]},{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
-
-    xs_p = xs[::5]
-    ys_p = ys[::5]
-    zs_p = zs[::5]
-    gtxs_p = gtxs[::5]
-    gtys_p = gtys[::5]
-    gtzs_p = gtzs[::5]
-    plt.plot(xs_p, zs_p, c='r', marker='o', label='estimated')
-    plt.plot(gtxs_p, gtzs_p, c='b', marker='x', label='ground truth')
-    plt.gca().set_aspect('equal', adjustable='box')
-    plt.xlabel('x (m)')
-    plt.ylabel('y (m)')
-    plt.title(f'2D Trajectory - {name}')
-    plt.legend()
-    plt.savefig(f"{kScriptFolder}/nh_data/{exp_name}_2d.png")
-    plt.close()
+    return
 
 
 if __name__ == "__main__":
@@ -492,12 +542,12 @@ if __name__ == "__main__":
     #     #     pass
 
     features = [
-        ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
+        # ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
         # ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
         # ['ORB', FeatureTrackerConfigs.ORB],
         # ['BRISK', FeatureTrackerConfigs.BRISK],
         # ['AKAZE', FeatureTrackerConfigs.AKAZE],
-        # ['SIFT', FeatureTrackerConfigs.SIFT],
+        ['SIFT', FeatureTrackerConfigs.SIFT],
         # ['SUPERPOINT', FeatureTrackerConfigs.SUPERPOINT],
         # ['R2D2', FeatureTrackerConfigs.R2D2],
         # ['LIGHTGLUE', FeatureTrackerConfigs.LIGHTGLUE],
@@ -505,16 +555,29 @@ if __name__ == "__main__":
         # ['XFEAT_XFEAT', FeatureTrackerConfigs.XFEAT_XFEAT],
         # ['LOFTR', FeatureTrackerConfigs.LOFTR]
     ]
+
+    feature_nums = [
+        3000,
+        2000,
+        1500,
+        1000,
+        500,
+        400,
+        100
+    ]
+
     baselines = [
-        # True,
+        True,
         False,
     ]
 
+    max_images = 100
+
     for f in features:
-        for baseline in baselines:
-            # try:
-            run_exp(f[0], f[1], 100, baseline,save_intermediate=False)
-            # except Exception as e:
-            #     print(f'Error in {f[0]}: {e}')
-            #     pass
-    
+        for num in feature_nums:
+            for baseline in baselines:
+                    try:
+                        run_exp(f[0], f[1], num, max_images, baseline, save_intermediate=False, plot_tracks=True)
+                    except Exception as e:
+                        with open(f'{kResultsFolder}/{f[0]}_{num}_{baseline}.txt', 'w') as f:
+                            f.write(f'Error: {e}')
