@@ -256,8 +256,11 @@ def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_
         zs_p = zs[::traj_skips]
         gtxs_p = gtxs[::traj_skips]
         gtzs_p = gtzs[::traj_skips]
-        plt.plot(xs_p, zs_p, c='r', marker='o', label='estimated')
-        plt.plot(gtxs_p, gtzs_p, c='b', marker='x', label='ground truth')
+        plt.figure(figsize=(12, 12))
+        plt.plot(xs_p, zs_p, c='tab:red', label='estimated')
+        plt.plot(gtxs_p, gtzs_p, c='tab:green', label='ground truth')
+        plt.scatter(xs_p, zs_p, c='tab:red', s=2)
+        plt.scatter(gtxs_p, gtzs_p, c='tab:green', s=2)
         plt.gca().set_aspect('equal', adjustable='box')
         plt.xlabel('x (m)')
         plt.ylabel('y (m)')
@@ -281,7 +284,7 @@ def run_exp(name, feature, feature_num=2000, max_images=10, baseline=False, save
     config_name = config_loc.split('.')[0]
     config = Config()
 
-    exp_name = f'{config_name}_{name}_{feature_num}_{"baseline" if baseline else "masked"}'
+    exp_name = f'{config_name}_^{name}^_@{feature_num}@_${"baseline" if baseline else "masked"}$'
     
     dataset = dataset_factory(config)
     setattr(dataset, 'skip', 1)
@@ -525,7 +528,7 @@ def run_exp(name, feature, feature_num=2000, max_images=10, baseline=False, save
     with open(f'{kResultsFolder}/{exp_name}.pkl', 'wb') as f:
         pickle.dump(results, f)
 
-    process_data(results, images=images, masks=images, draw_tracks=plot_tracks, plot_traj=plot_traj, traj_skips=5)
+    process_data(results, images=images, masks=images, draw_tracks=plot_tracks, plot_traj=plot_traj, traj_skips=20)
 
     return
 
@@ -550,12 +553,12 @@ if __name__ == "__main__":
     #     #     pass
 
     features = [
-        # ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
+        ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
         ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
-        # ['ORB', FeatureTrackerConfigs.ORB],
-        # ['BRISK', FeatureTrackerConfigs.BRISK],
-        # ['AKAZE', FeatureTrackerConfigs.AKAZE],
-        # ['SIFT', FeatureTrackerConfigs.SIFT],
+        ['ORB', FeatureTrackerConfigs.ORB],
+        ['BRISK', FeatureTrackerConfigs.BRISK],
+        ['AKAZE', FeatureTrackerConfigs.AKAZE],
+        ['SIFT', FeatureTrackerConfigs.SIFT],
         # ['SUPERPOINT', FeatureTrackerConfigs.SUPERPOINT],
         # ['R2D2', FeatureTrackerConfigs.R2D2],
         # ['LIGHTGLUE', FeatureTrackerConfigs.LIGHTGLUE],
@@ -565,13 +568,13 @@ if __name__ == "__main__":
     ]
 
     feature_nums = [
-        # 3000,
-        # 2000,
-        # 1500,
-        # 1000,
-        # 500,
+        3000,
+        2000,
+        1500,
+        1000,
+        500,
         400,
-        # 100
+        100
     ]
 
     baselines = [
@@ -579,13 +582,13 @@ if __name__ == "__main__":
         False,
     ]
 
-    max_images = 100
+    max_images = 1000
 
     for f in features:
         for num in feature_nums:
             for baseline in baselines:
                     try:
-                        run_exp(f[0], f[1], num, max_images, baseline, save_intermediate=False, plot_tracks=False)
+                        run_exp(f[0], f[1], num, max_images, baseline, save_intermediate=False, plot_tracks=True)
                     except Exception as e:
                         config= os.environ.get('PYSLAM_CONFIG')
                         config_name = config.split('.')[0]
