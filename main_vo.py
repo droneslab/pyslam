@@ -54,7 +54,7 @@ kScriptFolder = os.path.dirname(kScriptPath)
 kRootFolder = kScriptFolder
 kResultsFolder = kRootFolder + '/results'
 
-global_plotting = True
+global_plotting = False
 
 kUseRerun = True
 # check rerun does not have issues 
@@ -168,7 +168,12 @@ def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=Fals
     ts = []
     kps = []
     des = []
-    
+    xs = []
+    ys = []
+    zs = []
+    gtxs = []
+    gtys = []
+    gtzs = []
     img_id = 0
     images = []
     masks = []
@@ -199,10 +204,16 @@ def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=Fals
                 rs.append(rot)
                 ts.append(trans)
 
-            if(len(vo.traj3d_est)>1):	       # start drawing from the third image (when everything is initialized and flows in a normal way)
+            if(len(vo.traj3d_est)>=1):	       # start drawing from the third image (when everything is initialized and flows in a normal way)
 
                 x, y, z = vo.traj3d_est[-1]
                 gt_x, gt_y, gt_z = vo.traj3d_gt[-1]
+                xs.append(x)
+                ys.append(y)
+                zs.append(z)
+                gtxs.append(gt_x)
+                gtys.append(gt_y)
+                gtzs.append(gt_z)
                 if global_plotting:
                     if is_draw_traj_img:      # draw 2D trajectory (on the plane xz)
                         draw_x, draw_y = int(draw_scale*x) + half_traj_img_size, half_traj_img_size - int(draw_scale*z)
@@ -302,117 +313,152 @@ def run_exp(name, feature, max_images=10, baseline=False, save_intermediate=Fals
             pass
 
 
-    idxs = range(len(matched_kps))
-    idxs = [i*dataset.skip for i in idxs]
-    fig, ax = plt.subplots(2,1)
-    ax[0].plot(idxs, matched_kps, label='matched_kps')
-    ax[0].plot(idxs, num_inliers, label='num_inliers')
-    ax[0].legend()
-    ax[1].plot(idxs, px_shifts, label='px_shifts')
-    ax[1].legend()
+    # idxs = range(len(matched_kps))
+    # idxs = [i*dataset.skip for i in idxs]
+    # fig, ax = plt.subplots(2,1)
+    # ax[0].plot(idxs, matched_kps, label='matched_kps')
+    # ax[0].plot(idxs, num_inliers, label='num_inliers')
+    # ax[0].legend()
+    # ax[1].plot(idxs, px_shifts, label='px_shifts')
+    # ax[1].legend()
 
-    # Initialize an empty list to store matches between consecutive frames
-    matches_list = []
+    # # Initialize an empty list to store matches between consecutive frames
+    # matches_list = []
 
-    # Loop over consecutive pairs of frames
-    for i in range(len(des) - 1):
-        des1 = des[i]
-        des2 = des[i + 1]
+    # # Loop over consecutive pairs of frames
+    # for i in range(len(des) - 1):
+    #     des1 = des[i]
+    #     des2 = des[i + 1]
 
-        # If either descriptor is None, we simply append an empty match list
-        if des1 is None or des2 is None:
-            matches = []
-        else:
-            # Match features using BFMatcher and sort the matches based on distance
-            matches = bf.match(des1, des2)
-            matches = sorted(matches, key=lambda x: x.distance)
+    #     # If either descriptor is None, we simply append an empty match list
+    #     if des1 is None or des2 is None:
+    #         matches = []
+    #     else:
+    #         # Match features using BFMatcher and sort the matches based on distance
+    #         matches = bf.match(des1, des2)
+    #         matches = sorted(matches, key=lambda x: x.distance)
         
-        # Append the matches corresponding to frame i (matched with frame i+1)
-        matches_list.append(matches)
+    #     # Append the matches corresponding to frame i (matched with frame i+1)
+    #     matches_list.append(matches)
 
-    tracks = {}
-    next_track_id = 0
+    # tracks = {}
+    # next_track_id = 0
 
-    for i in range(len(des)):
-        if des[i] is not None and des[i].dtype != np.float32:
-            des[i] = des[i].astype(np.float32)
+    # for i in range(len(des)):
+    #     if des[i] is not None and des[i].dtype != np.float32:
+    #         des[i] = des[i].astype(np.float32)
 
-    # Process each frame as a starting point
-    for start_frame in tqdm(range(len(images) - 1)):
-        # Initialize new tracks for features in this frame
-        current_features = {i: next_track_id + i for i in range(len(kps[start_frame]))}
+    # # Process each frame as a starting point
+    # for start_frame in tqdm(range(len(images) - 1)):
+    #     # Initialize new tracks for features in this frame
+    #     current_features = {i: next_track_id + i for i in range(len(kps[start_frame]))}
         
-        # Add new features to tracks
-        for i in range(len(kps[start_frame])):
-            tracks[next_track_id + i] = [(start_frame, i)]
+    #     # Add new features to tracks
+    #     for i in range(len(kps[start_frame])):
+    #         tracks[next_track_id + i] = [(start_frame, i)]
         
-        next_track_id += len(kps[start_frame])
+    #     next_track_id += len(kps[start_frame])
 
-        # Track these features in subsequent frames
-        prev_descriptors = des[start_frame]
-        prev_features = current_features
+    #     # Track these features in subsequent frames
+    #     prev_descriptors = des[start_frame]
+    #     prev_features = current_features
 
-        if prev_descriptors is None:
-            continue  # Skip frames without descriptors
+    #     if prev_descriptors is None:
+    #         continue  # Skip frames without descriptors
 
-        for frame_idx in range(start_frame + 1, len(images)):
-            current_descriptors = des[frame_idx]
+    #     for frame_idx in range(start_frame + 1, len(images)):
+    #         current_descriptors = des[frame_idx]
 
-            if current_descriptors is None:
-                continue  # Skip frames without descriptors
+    #         if current_descriptors is None:
+    #             continue  # Skip frames without descriptors
 
-            # Ensure descriptors are of the same type
-            if prev_descriptors.dtype != np.float32:
-                prev_descriptors = prev_descriptors.astype(np.float32)
-            if current_descriptors.dtype != np.float32:
-                current_descriptors = current_descriptors.astype(np.float32)
+    #         # Ensure descriptors are of the same type
+    #         if prev_descriptors.dtype != np.float32:
+    #             prev_descriptors = prev_descriptors.astype(np.float32)
+    #         if current_descriptors.dtype != np.float32:
+    #             current_descriptors = current_descriptors.astype(np.float32)
 
-            matches = bf.knnMatch(prev_descriptors, current_descriptors, k=2)
+    #         matches = bf.knnMatch(prev_descriptors, current_descriptors, k=2)
 
-            # Apply Lowe’s ratio test
-            good_matches = []
-            for match in matches:
-                if len(match) >= 2:
-                    m, n = match[:2]
-                    if m.distance < 0.75 * n.distance:
-                        good_matches.append(m)
+    #         # Apply Lowe’s ratio test
+    #         good_matches = []
+    #         for match in matches:
+    #             if len(match) >= 2:
+    #                 m, n = match[:2]
+    #                 if m.distance < 0.75 * n.distance:
+    #                     good_matches.append(m)
 
-            # Update tracks with good matches
-            new_features = {}
-            for match in good_matches:
-                query_idx = match.queryIdx  # Previous frame feature
-                train_idx = match.trainIdx  # Current frame feature
+    #         # Update tracks with good matches
+    #         new_features = {}
+    #         for match in good_matches:
+    #             query_idx = match.queryIdx  # Previous frame feature
+    #             train_idx = match.trainIdx  # Current frame feature
                 
-                if query_idx in prev_features:
-                    track_id = prev_features[query_idx]
-                    tracks[track_id].append((frame_idx, train_idx))
-                    new_features[train_idx] = track_id  # Carry forward to next frame
+    #             if query_idx in prev_features:
+    #                 track_id = prev_features[query_idx]
+    #                 tracks[track_id].append((frame_idx, train_idx))
+    #                 new_features[train_idx] = track_id  # Carry forward to next frame
 
-            # Prepare for the next frame
-            prev_descriptors = current_descriptors
-            prev_features = new_features
+    #         # Prepare for the next frame
+    #         prev_descriptors = current_descriptors
+    #         prev_features = new_features
 
-    plt.figure(figsize=(24, 12))
-    for track_id, track in tqdm(tracks.items()):
-        frames = [f for f, _ in track]
-        plt.plot([track_id] * len(frames), frames, marker='o', linestyle='-', lw=0.05)
+    # plt.figure(figsize=(24, 12))
+    # for track_id, track in tqdm(tracks.items()):
+    #     frames = [f for f, _ in track]
+    #     plt.plot([track_id] * len(frames), frames, marker='o', linestyle='-', lw=0.05)
 
 
-    plt.xlabel('Feature Track ID ')
-    plt.ylabel('Frame ID')
-    plt.title(f'Feature Tracks Over Multiple Frames - {name}')
-    plt.gca().invert_yaxis() 
-    plt.savefig(f'nh_data/{exp_name}_tracks.png')
-    plt.close()
+    # plt.xlabel('Feature Track ID ')
+    # plt.ylabel('Frame ID')
+    # plt.title(f'Feature Tracks Over Multiple Frames - {name}')
+    # plt.gca().invert_yaxis() 
+    # plt.savefig(f'nh_data/{exp_name}_tracks.png')
+    # plt.close()
 
-    with open(f'nh_data/{exp_name}_tracks.pkl', 'wb') as f:
-        pickle.dump(tracks, f)
+    # with open(f'nh_data/{exp_name}_tracks.pkl', 'wb') as f:
+    #     pickle.dump(tracks, f)
+
+    print(f'''
+    matched_kps: {len(matched_kps)}
+    num_inliers: {len(num_inliers)}
+    px_shifts: {len(px_shifts)}
+    rs: {len(rs)}
+    ts: {len(ts)}
+    xs: {len(xs)}
+    ys: {len(ys)}
+    zs: {len(zs)}
+    gtxs: {len(gtxs)}
+    gtys: {len(gtys)}
+    gtzs: {len(gtzs)}
+    kps: {len(kps)}
+    des: {len(des)}
+    images: {len(images)}
+    masks: {len(masks)}
+          ''')
 
     # write csv
     with open(f'nh_data/{exp_name}.csv', 'w') as f:
-        f.write('frame_id,matched_kps,num_inliers,px_shifts\n')
+        f.write('frame_id,matched_kps,num_inliers,px_shifts,cx,cy,cz,gx,gy,gz\n')
         for i in range(len(matched_kps)):
-            f.write(f'{i*dataset.skip},{matched_kps[i]},{num_inliers[i]},{px_shifts[i]}\n')
+            # f.write(f'{i*dataset.skip},{matched_kps[i]},{num_inliers[i]},{px_shifts[i]}\n')
+            f.write(f'{i*dataset.skip},{matched_kps[i]},{num_inliers[i]},{px_shifts[i]},{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
+
+    xs_p = xs[::5]
+    ys_p = ys[::5]
+    zs_p = zs[::5]
+    gtxs_p = gtxs[::5]
+    gtys_p = gtys[::5]
+    gtzs_p = gtzs[::5]
+    plt.plot(xs_p, zs_p, c='r', marker='o', label='estimated')
+    plt.plot(gtxs_p, gtzs_p, c='b', marker='x', label='ground truth')
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.xlabel('x (m)')
+    plt.ylabel('y (m)')
+    plt.title(f'2D Trajectory - {name}')
+    plt.legend()
+    plt.savefig(f"{kScriptFolder}/nh_data/{exp_name}_2d.png")
+    plt.close()
 
 
 if __name__ == "__main__":
@@ -435,12 +481,12 @@ if __name__ == "__main__":
     #     #     pass
 
     features = [
-        # ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
+        ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
         # ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
         # ['ORB', FeatureTrackerConfigs.ORB],
         # ['BRISK', FeatureTrackerConfigs.BRISK],
         # ['AKAZE', FeatureTrackerConfigs.AKAZE],
-        ['SIFT', FeatureTrackerConfigs.SIFT],
+        # ['SIFT', FeatureTrackerConfigs.SIFT],
         # ['SUPERPOINT', FeatureTrackerConfigs.SUPERPOINT],
         # ['R2D2', FeatureTrackerConfigs.R2D2],
         # ['LIGHTGLUE', FeatureTrackerConfigs.LIGHTGLUE],
@@ -456,7 +502,7 @@ if __name__ == "__main__":
     for f in features:
         for baseline in baselines:
             # try:
-            run_exp(f[0], f[1], 20, baseline)
+            run_exp(f[0], f[1], 700, baseline,save_intermediate=False)
             # except Exception as e:
             #     print(f'Error in {f[0]}: {e}')
             #     pass

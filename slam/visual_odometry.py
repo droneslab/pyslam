@@ -186,15 +186,19 @@ class VisualOdometryEducational(VisualOdometryBase):
                     except Exception as e:
                         print(f"Error at {i}, {j} {e}")
 
-            for i in self.track_result.kps_cur_copy:
-                col = int(i[0])
-                row = int(i[1])
-                cv2.circle(new_img, (col, row), 2, (255, 0, 0), -1)
+            if self.track_result.kps_before_mask is not None:
+                for i in self.track_result.kps_before_mask:
+                    col = int(i[0])
+                    row = int(i[1])
+                    cv2.circle(new_img, (col, row), 2, (0, 0, 255), -1)
+                    
+            if self.track_result.kps_after_mask is not None:
+                for i in self.track_result.kps_after_mask:
+                    col = int(i[0])
+                    row = int(i[1])
+                    cv2.circle(new_img, (col, row), 2, (255, 0, 0), -1)
 
-            for i in self.kps_cur:
-                col = int(i[0])
-                row = int(i[1])
-                cv2.circle(new_img, (col, row), 2, (0, 0, 255), -1)
+
 
             res_file = os.path.join(self.save_loc, f'res_{frame_id}.png')
             cv2.imwrite(res_file, new_img)

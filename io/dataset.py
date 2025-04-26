@@ -473,24 +473,27 @@ class KittiDataset(Dataset):
             except:
                 print('could not retrieve image: ', frame_id, ' in path ', self.path )
 
-            # try:
-            mask_loc = os.path.join(self.path,'masks', 'mc_trials_50')
-            prob_file = os.path.join(mask_loc, f'{frame_id}_probs.npy')
-            std_file = os.path.join(mask_loc, f'{frame_id}_var.npy')
-            prob_mask = np.load(prob_file)
-            std_mask = np.load(std_file)
+            try:
+                mask_loc = os.path.join(self.path,'masks', 'mc_trials_50')
+                prob_file = os.path.join(mask_loc, f'{frame_id}_probs.npy')
+                std_file = os.path.join(mask_loc, f'{frame_id}_var.npy')
+                prob_mask = np.load(prob_file)
+                std_mask = np.load(std_file)
 
 
-            # get all probs greater than threshold
-            prob_map = np.where(prob_mask < self.prob_thresh, 1, 0)
-            std_map = np.where(std_mask > self.var_thresh, 1, 0)
+                # get all probs greater than threshold
+                prob_map = np.where(prob_mask < self.prob_thresh, 1, 0)
+                std_map = np.where(std_mask > self.var_thresh, 1, 0)
 
-            # count number of true values in prob_map
-            prob_count = np.count_nonzero(prob_map)
-            std_count = np.count_nonzero(std_map)
-            # print(f'prob_count: {prob_count}, std_count: {std_count}')
+                # count number of true values in prob_map
+                prob_count = np.count_nonzero(prob_map)
+                std_count = np.count_nonzero(std_map)
+                # print(f'prob_count: {prob_count}, std_count: {std_count}')
 
-            mask = np.logical_and(prob_map, std_map)
+                mask = np.logical_and(prob_map, std_map)
+            except:
+                print('could not retrieve mask: ', frame_id, ' in path ', self.path )
+                mask = None
 
             # img_temp = img.copy()
             # img_temp[mask] = [0, 255, 0]
