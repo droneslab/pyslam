@@ -46,6 +46,7 @@ from rerun_interface import Rerun
 from tqdm import tqdm
 import pickle
 import matplotlib.pyplot as plt
+import traceback
 
 bf = cv2.BFMatcher(cv2.NORM_L2)
 
@@ -264,6 +265,13 @@ def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_
         plt.legend()
         plt.savefig(f"{kResultsFolder}/{exp_name}_2d.png")
         plt.close()
+
+        with open(f'{kResultsFolder}/{exp_name}_trajectory.csv', 'w') as f:
+            print(f"saving {kResultsFolder}/{exp_name}_2d.csv with {len(xs)} points")
+            f.write(f'i,x,y,z,gtx,gty,gtz\n')
+            for i in range(len(xs)):
+                # f.write(f'{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
+                f.write(f'{i},{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
 
     return
     
@@ -543,11 +551,11 @@ if __name__ == "__main__":
 
     features = [
         # ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
-        # ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
+        ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
         # ['ORB', FeatureTrackerConfigs.ORB],
         # ['BRISK', FeatureTrackerConfigs.BRISK],
         # ['AKAZE', FeatureTrackerConfigs.AKAZE],
-        ['SIFT', FeatureTrackerConfigs.SIFT],
+        # ['SIFT', FeatureTrackerConfigs.SIFT],
         # ['SUPERPOINT', FeatureTrackerConfigs.SUPERPOINT],
         # ['R2D2', FeatureTrackerConfigs.R2D2],
         # ['LIGHTGLUE', FeatureTrackerConfigs.LIGHTGLUE],
@@ -557,13 +565,13 @@ if __name__ == "__main__":
     ]
 
     feature_nums = [
-        3000,
-        2000,
-        1500,
-        1000,
-        500,
+        # 3000,
+        # 2000,
+        # 1500,
+        # 1000,
+        # 500,
         400,
-        100
+        # 100
     ]
 
     baselines = [
@@ -577,7 +585,9 @@ if __name__ == "__main__":
         for num in feature_nums:
             for baseline in baselines:
                     try:
-                        run_exp(f[0], f[1], num, max_images, baseline, save_intermediate=False, plot_tracks=True)
+                        run_exp(f[0], f[1], num, max_images, baseline, save_intermediate=False, plot_tracks=False)
                     except Exception as e:
-                        with open(f'{kResultsFolder}/{f[0]}_{num}_{baseline}.txt', 'w') as f:
-                            f.write(f'Error: {e}')
+                        config= os.environ.get('PYSLAM_CONFIG')
+                        config_name = config.split('.')[0]
+                        with open(f'{kResultsFolder}/{config_name}_{f[0]}_{num}_{"baseline" if baseline else "masked"}.txt', 'w') as wf:
+                            wf.write(traceback.format_exc())
