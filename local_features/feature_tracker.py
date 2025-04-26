@@ -225,13 +225,16 @@ class LkFeatureTracker(FeatureTracker):
         if mask is not None:
             masks = []
             for i in range(len(kps_ref)):
-                py,px = kps_ref[i]
-                px = int(px)
-                py = int(py)
-                if mask[px,py] == False:
+                try:
+                    py,px = kps_ref[i]
+                    px = int(px)
+                    py = int(py)
+                    if mask[px,py] == False:
+                        masks.append(True)
+                    else:
+                        masks.append(False)
+                except:
                     masks.append(True)
-                else:
-                    masks.append(False)
             kps_ref = kps_ref[masks]
         kps_cur, st, err = cv2.calcOpticalFlowPyrLK(image_ref, image_cur, kps_ref, None, **self.lk_params)  #shape: [k,2] [k,1] [k,1]
         st = st.reshape(st.shape[0])
@@ -313,13 +316,16 @@ class DescriptorFeatureTracker(FeatureTracker):
         if mask is not None:
             masks = []
             for i in range(len(kps_cur)):
-                py,px = kps_cur[i]
-                px = int(px)
-                py = int(py)
-                if mask[px,py] == False:
+                try:
+                    py,px = kps_cur[i]
+                    px = int(px)
+                    py = int(py)
+                    if mask[px,py] == False:
+                        masks.append(True)
+                    else:
+                        masks.append(False)
+                except:
                     masks.append(True)
-                else:
-                    masks.append(False)
             kps_cur = kps_cur[masks]
             des_cur = des_cur[masks]
         # Printer.orange(des_ref.shape)
