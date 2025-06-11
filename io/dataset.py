@@ -47,6 +47,7 @@ kRootFolder = kScriptFolder + '/..'
 kSettingsFolder = kRootFolder + '/settings'
 
 
+
 # Base class for implementing datasets
 class Dataset(object):
     def __init__(self, path, name, sensor_type=SensorType.MONOCULAR, fps=None, associations=None, start_frame_id=0, 
@@ -438,7 +439,7 @@ class Webcam(object):
 
 
 class KittiDataset(Dataset):
-    def __init__(self, path, name, sensor_type=SensorType.STEREO, associations=None, start_frame_id=0, type=DatasetType.KITTI): 
+    def __init__(self, path, name, top_k=85, mask_name='mc_trails_50', sensor_type=SensorType.STEREO, associations=None, start_frame_id=0, type=DatasetType.KITTI): 
         super().__init__(path, name, sensor_type, 10, associations, start_frame_id, type)
         self.environment_type = DatasetEnvironmentType.OUTDOOR
         if sensor_type != SensorType.MONOCULAR and sensor_type != SensorType.STEREO:
@@ -454,6 +455,8 @@ class KittiDataset(Dataset):
         self.num_frames = self.max_frame_id
         self.prob_thresh = 0.05
         self.var_thresh = 0.01
+        self.top_k = top_k
+        self.mask_name = mask_name
 
         print('Processing KITTI Sequence of lenght: ', len(self.timestamps))
         
@@ -462,7 +465,17 @@ class KittiDataset(Dataset):
         if self.is_color:
             print('dataset in color!')            
             self.image_left_path = '/image_2/'
-            self.image_right_path = '/image_3/'                           
+            self.image_right_path = '/image_3/' 
+
+    def top_k_percent_mask(self, prob_np, var_np, k=85):
+        prob_norm = (prob_np - prob_np.min()) / (prob_np.max() - prob_np.min() + 1e-6)
+        var_norm = (var_np - var_np.min()) / (var_np.max() - var_np.min() + 1e-6)
+        score = prob_norm * (1 - var_norm)
+        thresh = np.percentile(score, 100 - k)
+        mask = (score >= thresh).astype(np.uint8)
+
+        return mask
+                          
         
     def getImage(self, frame_id):
         img = None
@@ -474,8 +487,9 @@ class KittiDataset(Dataset):
                 print('could not retrieve image: ', frame_id, ' in path ', self.path )
 
             try:
-                mask_loc = os.path.join(self.path,'masks', 'mc_trials_50')
-                prob_file = os.path.join(mask_loc, f'{frame_id}_probs.npy')
+                mask_loc = os.path.join(self.path,'masks', self.mask_name)
+                print(f"Loaded mask {mask_loc} for frame {frame_id}")
+                prob_file = os.path.join(mask_loc, f'{frame_id}_prob.npy')
                 std_file = os.path.join(mask_loc, f'{frame_id}_var.npy')
                 prob_mask = np.load(prob_file)
                 std_mask = np.load(std_file)
@@ -490,9 +504,10 @@ class KittiDataset(Dataset):
                 std_count = np.count_nonzero(std_map)
                 # print(f'prob_count: {prob_count}, std_count: {std_count}')
 
-                mask = np.logical_and(prob_map, std_map)
-            except:
-                print('could not retrieve mask: ', frame_id, ' in path ', self.path )
+                # mask = np.logical_and(prob_map, std_map)
+                mask = self.top_k_percent_mask(prob_mask, std_mask, self.top_k)
+            except Exception as e:
+                print('could not retrieve mask: ', frame_id, ' in path ', self.path, '|', e )
                 mask = None
 
             # img_temp = img.copy()

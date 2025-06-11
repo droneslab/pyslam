@@ -16,7 +16,8 @@ DATASET:
 KITTI_DATASET:
   type: kitti
   sensor_type: mono # Here, 'sensor_type' can be 'mono' or 'stereo'
-  base_path: /home/christoa/Downloads/kitti
+  base_path: /home/moog-2/pixer/kitti
+  mask_name: mc_trials_50
   #
   # name: '06'
   # settings: settings/KITTI04-12.yaml # do not forget to correctly set the corresponding camera settings file 
