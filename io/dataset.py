@@ -470,7 +470,8 @@ class KittiDataset(Dataset):
     def top_k_percent_mask(self, prob_np, var_np, k=85):
         prob_norm = (prob_np - prob_np.min()) / (prob_np.max() - prob_np.min() + 1e-6)
         var_norm = (var_np - var_np.min()) / (var_np.max() - var_np.min() + 1e-6)
-        score = prob_norm * (1 - var_norm)
+        # score = prob_norm * (1 - var_norm)
+        score = prob_norm
         thresh = np.percentile(score, 100 - k)
         mask = (score >= thresh).astype(np.uint8)
 
@@ -489,23 +490,64 @@ class KittiDataset(Dataset):
             try:
                 mask_loc = os.path.join(self.path,'masks', self.mask_name)
                 print(f"Loaded mask {mask_loc} for frame {frame_id}")
-                prob_file = os.path.join(mask_loc, f'{frame_id}_prob.npy')
-                std_file = os.path.join(mask_loc, f'{frame_id}_var.npy')
-                prob_mask = np.load(prob_file)
-                std_mask = np.load(std_file)
+                # got_mask = False
+                got_prob = False
+                got_std = False
+                prob_path1 = os.path.join(mask_loc, f'{frame_id}_prob.npy')
+                prob_path2 = os.path.join(mask_loc, f'{frame_id}_probs.npy')
+                prob_path3 = os.path.join(mask_loc, f'prob_{frame_id}.npy')
+                prob_path4 = os.path.join(mask_loc, f'probs_{frame_id}.npy')
+                std_path1 = os.path.join(mask_loc, f'{frame_id}_var.npy')
+                std_path2 = os.path.join(mask_loc, f'{frame_id}_vars.npy')
+                std_path3 = os.path.join(mask_loc, f'var_{frame_id}.npy')
+                std_path4 = os.path.join(mask_loc, f'vars_{frame_id}.npy')
+                
+                if os.path.exists(prob_path1):
+                    prob_mask = np.load(prob_path1)
+                    got_prob = True
+                elif os.path.exists(prob_path2):
+                    prob_mask = np.load(prob_path2)
+                    got_prob = True
+                elif os.path.exists(prob_path3):
+                    prob_mask = np.load(prob_path3)
+                    got_prob = True
+                elif os.path.exists(prob_path4):
+                    prob_mask = np.load(prob_path4)
+                    got_prob = True
+                
+                if os.path.exists(std_path1):
+                    std_mask = np.load(std_path1)
+                    got_std = True
+                elif os.path.exists(std_path2):
+                    std_mask = np.load(std_path2)
+                    got_std = True
+                elif os.path.exists(std_path3):
+                    std_mask = np.load(std_path3)
+                    got_std = True
+                elif os.path.exists(std_path4):
+                    std_mask = np.load(std_path4)
+                    got_std = True
+                
+                if got_prob and got_std:
+                    # prob_file = os.path.join(mask_loc, f'{frame_id}_prob.npy')
+                    # std_file = os.path.join(mask_loc, f'{frame_id}_var.npy')
+                
+                    # prob_mask = np.load(prob_file)
+                    # std_mask = np.load(std_file)
 
+                    # get all probs greater than threshold
+                    prob_map = np.where(prob_mask < self.prob_thresh, 1, 0)
+                    std_map = np.where(std_mask > self.var_thresh, 1, 0)
 
-                # get all probs greater than threshold
-                prob_map = np.where(prob_mask < self.prob_thresh, 1, 0)
-                std_map = np.where(std_mask > self.var_thresh, 1, 0)
+                    # count number of true values in prob_map
+                    prob_count = np.count_nonzero(prob_map)
+                    std_count = np.count_nonzero(std_map)
+                    # print(f'prob_count: {prob_count}, std_count: {std_count}')
 
-                # count number of true values in prob_map
-                prob_count = np.count_nonzero(prob_map)
-                std_count = np.count_nonzero(std_map)
-                # print(f'prob_count: {prob_count}, std_count: {std_count}')
-
-                # mask = np.logical_and(prob_map, std_map)
-                mask = self.top_k_percent_mask(prob_mask, std_mask, self.top_k)
+                    # mask = np.logical_and(prob_map, std_map)
+                    mask = self.top_k_percent_mask(prob_mask, std_mask, self.top_k)
+                else:
+                    raise FileNotFoundError(f"Mask files not found for frame {frame_id} in {mask_loc}")
             except Exception as e:
                 print('could not retrieve mask: ', frame_id, ' in path ', self.path, '|', e )
                 mask = None

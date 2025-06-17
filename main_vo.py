@@ -288,7 +288,8 @@ def run_exp(name, feature, feature_num=2000, max_images=10, top_k = 85, mask_nam
     setattr(config, 'mask_name', mask_name)
 
     # exp_name = f'{config_name}_^{name}^_@{feature_num}@_${"baseline" if baseline else "masked"}$'
-    exp_name = f'{config_name}_^{name}^_@{feature_num}@_${"baseline" if baseline else "masked"}$_#{top_k}#_*{mask_name}*'
+    # exp_name = f'{config_name}_^{name}^_@{feature_num}@_${"baseline" if baseline else "masked"}$_#{top_k}#_*{mask_name}*'
+    exp_name = f'prob{config_name}_^{name}^_@{feature_num}@_#{top_k}#_*{mask_name}*_${"baseline" if baseline else "masked"}$'
     
     dataset = dataset_factory(config)
     setattr(dataset, 'skip', 1)
@@ -590,8 +591,10 @@ if __name__ == "__main__":
     top_ks = [0,25,33,50,66]
 
     mask_loc = [
-        # 'mc_trials_50',
-        'moped_uh_25000_mse_mc100_iter25000'
+        'mc_trials_50',
+        'moped_uh_25000_mse_mc100_iter25000',
+        'mc_trials_100',
+        'moped_uh_25000_mse_mc25_iter25000',
     ]
 
     max_images = 1000
