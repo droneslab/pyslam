@@ -61,6 +61,7 @@ def dataset_factory(config:'Config'):
     name = dataset_settings['name']
     top_k = config.top_k    
     mask_name = config.mask_name
+    eval_expr = config.eval_expr
     
     sensor_type = SensorType.MONOCULAR
     if 'sensor_type' in dataset_settings:
@@ -99,7 +100,7 @@ def dataset_factory(config:'Config'):
     dataset = None 
 
     if type == 'kitti':
-        dataset = KittiDataset(path, name, top_k,mask_name, sensor_type, associations, start_frame_id, DatasetType.KITTI)
+        dataset = KittiDataset(path, name, top_k,mask_name,eval_expr, sensor_type, associations, start_frame_id, DatasetType.KITTI)
         dataset.set_is_color(is_color)   
     if type == 'tum':
         dataset = TumDataset(path, name, sensor_type, associations, start_frame_id, DatasetType.TUM)

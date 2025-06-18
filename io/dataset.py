@@ -439,7 +439,7 @@ class Webcam(object):
 
 
 class KittiDataset(Dataset):
-    def __init__(self, path, name, top_k=85, mask_name='mc_trails_50', sensor_type=SensorType.STEREO, associations=None, start_frame_id=0, type=DatasetType.KITTI): 
+    def __init__(self, path, name, top_k=85, mask_name='mc_trails_50', eval_expr='prob_norm*(1-var_norm)', sensor_type=SensorType.STEREO, associations=None, start_frame_id=0, type=DatasetType.KITTI): 
         super().__init__(path, name, sensor_type, 10, associations, start_frame_id, type)
         self.environment_type = DatasetEnvironmentType.OUTDOOR
         if sensor_type != SensorType.MONOCULAR and sensor_type != SensorType.STEREO:
@@ -457,6 +457,7 @@ class KittiDataset(Dataset):
         self.var_thresh = 0.01
         self.top_k = top_k
         self.mask_name = mask_name
+        self.eval_expr = eval_expr
 
         print('Processing KITTI Sequence of lenght: ', len(self.timestamps))
         
@@ -471,7 +472,9 @@ class KittiDataset(Dataset):
         prob_norm = (prob_np - prob_np.min()) / (prob_np.max() - prob_np.min() + 1e-6)
         var_norm = (var_np - var_np.min()) / (var_np.max() - var_np.min() + 1e-6)
         # score = prob_norm * (1 - var_norm)
-        score = prob_norm
+        # score = prob_norm
+        print(f"Eval expr:", self.eval_expr)
+        score = eval(self.eval_expr)
         thresh = np.percentile(score, 100 - k)
         mask = (score >= thresh).astype(np.uint8)
 
@@ -483,6 +486,14 @@ class KittiDataset(Dataset):
         if frame_id < self.max_frame_id:
             try: 
                 img = cv2.imread(self.path + '/sequences/' + self.name + self.image_left_path + str(frame_id).zfill(6) + '.png')
+                # img = img[self.crop_list[0]:-self.crop_list[2],self.crop_list[3]:-self.crop_list[1]]
+                # print(f"Image:{img.shape}")
+                row_start = self.crop_list[0]
+                row_end = img.shape[0]-self.crop_list[2]
+                col_start = self.crop_list[3]
+                col_end = img.shape[1]-self.crop_list[1]
+                img = img[row_start:row_end,col_start:col_end]
+                print(f"Image:{img.shape}")
                 self._timestamp = self.timestamps[frame_id]
             except:
                 print('could not retrieve image: ', frame_id, ' in path ', self.path )

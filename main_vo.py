@@ -280,19 +280,33 @@ def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_
     return
     
 
-def run_exp(name, feature, feature_num=2000, max_images=10, top_k = 85, mask_name='mc_trials_50', baseline=False, save_intermediate=False, plot_tracks=False, plot_traj=True):
+def run_exp(
+    name, 
+    feature, 
+    feature_num=2000, 
+    max_images=10, 
+    top_k = 85, 
+    mask_name=['mc_trials_50',0,0,0,0], 
+    eval_expr=[2,"prob_norm*(1-var_norm)"],
+    baseline=False, 
+    save_intermediate=False, 
+    plot_tracks=False, 
+    plot_traj=True
+    ):
     config_loc = os.environ.get('PYSLAM_CONFIG')
     config_name = config_loc.split('.')[0]
     config = Config()
     setattr(config, 'top_k', top_k)
-    setattr(config, 'mask_name', mask_name)
+    setattr(config, 'mask_name', mask_name[0])
+    setattr(config,'eval_expr',eval_expr[1])
 
     # exp_name = f'{config_name}_^{name}^_@{feature_num}@_${"baseline" if baseline else "masked"}$'
     # exp_name = f'{config_name}_^{name}^_@{feature_num}@_${"baseline" if baseline else "masked"}$_#{top_k}#_*{mask_name}*'
-    exp_name = f'prob{config_name}_^{name}^_@{feature_num}@_#{top_k}#_*{mask_name}*_${"baseline" if baseline else "masked"}$'
+    exp_name = f'{config_name}_^{name}^_!{eval_expr[0]}{eval_expr[1]}!_@{feature_num}@_#{top_k}#_*{mask_name[0]}*_${"baseline" if baseline else "masked"}$'
     
     dataset = dataset_factory(config)
     setattr(dataset, 'skip', 1)
+    setattr(dataset, 'crop_list', mask_name[1:])
 
     groundtruth = groundtruth_factory(config.dataset_settings)
 
@@ -573,13 +587,13 @@ if __name__ == "__main__":
     ]
 
     feature_nums = [
-        3000,
-        2000,
+        # 3000,
+        # 2000,
         1500,
-        1000,
-        500,
-        400,
-        100
+        # 1000,
+        # 500,
+        # 400,
+        # 100
     ]
 
     baselines = [
@@ -589,12 +603,19 @@ if __name__ == "__main__":
 
     # top_ks = np.arange(100, -1, -20, dtype=int).tolist()
     top_ks = [0,25,33,50,66]
+    # top_ks = [0]
 
     mask_loc = [
-        'mc_trials_50',
-        'moped_uh_25000_mse_mc100_iter25000',
-        'mc_trials_100',
-        'moped_uh_25000_mse_mc25_iter25000',
+        ['mc_trials_50',9,9,9,9],
+        ['moped_uh_25000_mse_mc100_iter25000',0,0,0,0],
+        ['mc_trials_100',9,9,9,9],
+        ['moped_uh_25000_mse_mc25_iter25000',0,0,0,0]
+    ]
+    
+    expressions = [
+        'prob_norm',
+        '1-var_norm',
+        'prob_norm*(1-var_norm)'
     ]
 
     max_images = 1000
@@ -602,17 +623,21 @@ if __name__ == "__main__":
     for mask_l in mask_loc:
         for f in features:
             for num in feature_nums:
-                for baseline in baselines:
-                    for k in top_ks:
-                        try:
-                            if not baseline and k >= 0:
-                                run_exp(f[0], f[1], num, max_images, k, mask_l, baseline, save_intermediate=False, plot_tracks=False)
-                            elif baseline and k==0:
-                                run_exp(f[0], f[1], num, max_images, k, mask_l, baseline, save_intermediate=False, plot_tracks=False)
-                            else:
-                                print(f'Skipping {f[0]} with num {num} and top_k {k} for baseline {baseline}')
-                        except Exception as e:
-                            config= os.environ.get('PYSLAM_CONFIG')
-                            config_name = config.split('.')[0]
-                            with open(f'{kResultsFolder}/{config_name}_{f[0]}_{num}_{"baseline" if baseline else "masked"}_{k}_{mask_l}.txt', 'w') as wf:
-                                wf.write(traceback.format_exc())
+                for e_idx, exp in enumerate(expressions):
+                    for baseline in baselines:
+                        for k in top_ks:
+                            try:
+                                if not baseline and k >= 0:
+                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
+                                elif baseline and k==0:
+                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
+                                else:
+                                    print(f'Skipping {f[0]} with num {num} and top_k {k} for baseline {baseline}')
+                            except Exception as e:
+                                config= os.environ.get('PYSLAM_CONFIG')
+                                config_name = config.split('.')[0]
+                                # with open(f'{kResultsFolder}/{config_name}_{f[0]}_{num}_{"baseline" if baseline else "masked"}_{k}_{mask_l}.txt', 'w') as wf:
+                                #     wf.write(traceback.format_exc())
+                                exp_name = f'{config_name}_^{f[0]}^_!{e_idx}{exp}!_@{num}@_#{k}#_*{mask_l[0]}*_${"baseline" if baseline else "masked"}$'
+                                with open(f'{kResultsFolder}/{exp_name}_error.txt', 'w') as wf:
+                                    wf.write(traceback.format_exc())

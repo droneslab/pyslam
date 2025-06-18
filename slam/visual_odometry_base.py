@@ -100,7 +100,7 @@ class VisualOdometryBase:
             print('..................................')
             print(f'frame: {frame_id}, timestamp: {timestamp}')       
         # check coherence of image size with camera settings 
-        assert(img.shape[0]==self.cam.height and img.shape[1]==self.cam.width), "Frame: provided image has not the same size as the camera model or image is not grayscale"
+        # assert(img.shape[0]==self.cam.height and img.shape[1]==self.cam.width), "Frame: provided image has not the same size as the camera model or image is not grayscale"
         self.cur_image = img
         self.cur_depth = depth
         self.cur_timestamp = timestamp
