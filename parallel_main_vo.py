@@ -48,6 +48,7 @@ import pickle
 import matplotlib.pyplot as plt
 
 import traceback
+import multiprocessing
 
 bf = cv2.BFMatcher(cv2.NORM_L2)
 
@@ -551,50 +552,43 @@ def run_exp(
 
     return
 
+def run_wrapper(args):
+    f_name, f_config, num, max_images, k, mask_l, (e_idx, exp), baseline = args
+    try:
+        if not baseline and k >= 0:
+            run_exp(f_name, f_config, num, max_images, k, mask_l, [e_idx, exp], baseline,
+                    save_intermediate=False, plot_tracks=False)
+        elif baseline and k == 0:
+            run_exp(f_name, f_config, num, max_images, k, mask_l, [e_idx, exp], baseline,
+                    save_intermediate=False, plot_tracks=False)
+        else:
+            print(f'Skipping {f_name} with num {num} and top_k {k} for baseline {baseline}')
+    except Exception as e:
+        config = os.environ.get('PYSLAM_CONFIG', 'unknown_config')
+        config_name = config.split('.')[0]
+        exp_name = f'{config_name}_^{f_name}^_!{e_idx}{exp}!_@{num}@_#{k}#_*{mask_l[0]}*_${"baseline" if baseline else "masked"}$'
+        with open(f'{kResultsFolder}/{exp_name}_error.txt', 'w') as wf:
+            wf.write(traceback.format_exc())
 
 if __name__ == "__main__":
-    # set PYSLAM_CONFIG environment variable to the path of the settings file
-    # feature_dict = {
-    #     # "LK_SHI_TOMASI": FeatureTrackerConfigs.LK_SHI_TOMASI,
-    #     # "LK_FAST": FeatureTrackerConfigs.LK_FAST,
-    #     # "ORB": FeatureTrackerConfigs.ORB,
-    #     # "BRISK": FeatureTrackerConfigs.BRISK,
-    #     # "AKAZE": FeatureTrackerConfigs.AKAZE,
-    #     "SIFT": FeatureTrackerConfigs.SIFT,
-    #     # "SUPERPOINT": FeatureTrackerConfigs.SUPERPOINT,
-    #     # "R2D2": FeatureTrackerConfigs.R2D2
-    # }
-    # for key,val in feature_dict.items():
-    #     # try:
-    #     run_exp(key,val,70)
-    #     # except Exception as e:
-    #     #     print(f'Error in {key}: {e}')
-    #     #     pass
 
     features = [
         ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
-        # ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
-        # ['ORB', FeatureTrackerConfigs.ORB],
-        # ['BRISK', FeatureTrackerConfigs.BRISK],
-        # ['AKAZE', FeatureTrackerConfigs.AKAZE],
-        # ['SIFT', FeatureTrackerConfigs.SIFT],
-        
-        # ['SUPERPOINT', FeatureTrackerConfigs.SUPERPOINT],
-        # ['R2D2', FeatureTrackerConfigs.R2D2],
-        # ['LIGHTGLUE', FeatureTrackerConfigs.LIGHTGLUE],
-        # ['XFEAT', FeatureTrackerConfigs.XFEAT],
-        # ['XFEAT_XFEAT', FeatureTrackerConfigs.XFEAT_XFEAT],
-        # ['LOFTR', FeatureTrackerConfigs.LOFTR]
+        ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
+        ['ORB', FeatureTrackerConfigs.ORB],
+        ['BRISK', FeatureTrackerConfigs.BRISK],
+        ['AKAZE', FeatureTrackerConfigs.AKAZE],
+        ['SIFT', FeatureTrackerConfigs.SIFT],
     ]
 
     feature_nums = [
         3000,
-        # 2000,
-        # 1500,
-        # 1000,
-        # 500,
-        # 400,
-        # 100
+        2000,
+        1500,
+        1000,
+        500,
+        400,
+        100
     ]
 
     baselines = [
@@ -603,8 +597,8 @@ if __name__ == "__main__":
     ]
 
     # top_ks = np.arange(100, -1, -20, dtype=int).tolist()
-    # top_ks = [0,25,33,50,66]
-    top_ks = [25]
+    top_ks = [0,25,33,50,66]
+    # top_ks = [0]
 
     mask_loc = [
         ['mc_trials_50',9,9,9,9],
@@ -614,31 +608,46 @@ if __name__ == "__main__":
     ]
     
     expressions = [
-        # 'prob_norm',
+        'prob_norm',
         '1-var_norm',
-        # 'prob_norm*(1-var_norm)'
+        'prob_norm*(1-var_norm)'
     ]
 
     max_images = 1000
 
+    # for mask_l in mask_loc:
+    #     for f in features:
+    #         for num in feature_nums:
+    #             for e_idx, exp in enumerate(expressions):
+    #                 for baseline in baselines:
+    #                     for k in top_ks:
+    #                         try:
+    #                             if not baseline and k >= 0:
+    #                                 run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
+    #                             elif baseline and k==0:
+    #                                 run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
+    #                             else:
+    #                                 print(f'Skipping {f[0]} with num {num} and top_k {k} for baseline {baseline}')
+    #                         except Exception as e:
+    #                             config= os.environ.get('PYSLAM_CONFIG')
+    #                             config_name = config.split('.')[0]
+    #                             # with open(f'{kResultsFolder}/{config_name}_{f[0]}_{num}_{"baseline" if baseline else "masked"}_{k}_{mask_l}.txt', 'w') as wf:
+    #                             #     wf.write(traceback.format_exc())
+    #                             exp_name = f'{config_name}_^{f[0]}^_!{e_idx}{exp}!_@{num}@_#{k}#_*{mask_l[0]}*_${"baseline" if baseline else "masked"}$'
+    #                             with open(f'{kResultsFolder}/{exp_name}_error.txt', 'w') as wf:
+    #                                 wf.write(traceback.format_exc())
+
+    tasks = []
+
     for mask_l in mask_loc:
-        for f in features:
+        for f_name, f_config in features:
             for num in feature_nums:
                 for e_idx, exp in enumerate(expressions):
                     for baseline in baselines:
                         for k in top_ks:
-                            try:
-                                if not baseline and k >= 0:
-                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
-                                elif baseline and k==0:
-                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
-                                else:
-                                    print(f'Skipping {f[0]} with num {num} and top_k {k} for baseline {baseline}')
-                            except Exception as e:
-                                config= os.environ.get('PYSLAM_CONFIG')
-                                config_name = config.split('.')[0]
-                                # with open(f'{kResultsFolder}/{config_name}_{f[0]}_{num}_{"baseline" if baseline else "masked"}_{k}_{mask_l}.txt', 'w') as wf:
-                                #     wf.write(traceback.format_exc())
-                                exp_name = f'{config_name}_^{f[0]}^_!{e_idx}{exp}!_@{num}@_#{k}#_*{mask_l[0]}*_${"baseline" if baseline else "masked"}$'
-                                with open(f'{kResultsFolder}/{exp_name}_error.txt', 'w') as wf:
-                                    wf.write(traceback.format_exc())
+                            tasks.append((f_name, f_config, num, max_images, k, mask_l, (e_idx, exp), baseline)) 
+
+    print(f'Total tasks: {len(tasks)}')
+
+    # with multiprocessing.Pool(processes=4) as pool:
+    #     pool.map(run_wrapper, tasks)
