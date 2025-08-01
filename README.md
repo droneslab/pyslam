@@ -37,6 +37,7 @@ pySLAM serves as flexible baseline framework to experiment with VO/SLAM techniqu
     - [How to install non-free OpenCV modules](#how-to-install-non-free-opencv-modules)
     - [Troubleshooting and performance issues](#troubleshooting-and-performance-issues)
   - [Usage](#usage)
+    - [PIXER Usage](#pixer-usage)
     - [Visual odometry](#visual-odometry)
     - [Full SLAM](#full-slam)
     - [Selecting a dataset and different configuration parameters](#selecting-a-dataset-and-different-configuration-parameters)
@@ -227,6 +228,50 @@ $ . pyenv-activate.sh   # Activate `pyslam` python environment. Only needed once
 If you are using `pixi` then just run `pixi shell` to activate the `pyslam` environment.
 The file [config.yaml](./config.yaml) can be used as a unique entry-point to configure the system and its global configuration parameters contained in [pyslam/config_parameters.py](./pyslam/config_parameters.py). Further information on how to configure pySLAM are provided [here](#selecting-a-dataset-and-different-configuration-parameters).
 
+## Pixer-Usage
+
+---
+
+To use pixer you need to set the config file as an environment variable. `cd` into the repo and then run `export PYSLAM_CONFIG=config_pixer.yaml`. Inside `config_pixer.yaml` there is a `KITTI_DATASET` section which includes a base path. The base path assumes the data is organized in the following format
+
+```bash
+kitti/
+├── masks
+│   ├── mc_trials_100  
+│   ├── mc_trials_50  
+│   ├── moped_uh_25000_mse_mc100_iter25000  
+│   └── moped_uh_25000_mse_mc25_iter25000  
+├── poses
+│   └── 00.txt
+└── sequences
+    └── 00
+        ├── calib.txt
+        ├── image_0  
+        ├── image_1  
+        └── times.txt
+
+```
+
+The `main_vo.py` file includes various parameters that can be defined before running. 
+
+```python
+mask_loc = [
+        ['mc_trials_50',0,0,0,0],
+        ['moped_uh_25000_mse_mc100_iter25000',0,0,0,0],
+        ['mc_trials_100',0,0,0,0],
+        ['moped_uh_25000_mse_mc25_iter25000',0,0,0,0]
+    ]
+    
+expressions = [
+    'prob_norm',
+    '1-var_norm',
+    'prob_norm*(1-var_norm)'
+]
+```
+
+`mask_loc` consists of a list of `[mask_name, crop_top, crop_right, crop_bottom, crop_left]` and `expressions` is the evaluation format. It must be a valid python expression consisting of constants, numpy expressions or the variables `prob_norm, var_norm`. The function evaluates this expression during runtime.
+
+---
  
 
 ### Visual odometry
