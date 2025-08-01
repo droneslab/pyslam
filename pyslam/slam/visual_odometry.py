@@ -21,12 +21,14 @@
 import numpy as np
 import cv2
 
-from pyslam.slam.camera import Camera
-from pyslam.local_features.feature_tracker import FeatureTrackerTypes, FeatureTrackingResult, FeatureTracker
-from pyslam.utilities.utils_geom import poseRt, is_rotation_matrix, closest_rotation_matrix
-from pyslam.utilities.timer import TimerFps
-from pyslam.io.ground_truth import GroundTruth
-from pyslam.slam.visual_odometry_base import VoState, VisualOdometryBase
+from camera import Camera
+from feature_tracker import FeatureTrackerTypes, FeatureTrackingResult, FeatureTracker
+from utils_geom import poseRt, is_rotation_matrix, closest_rotation_matrix
+from timer import TimerFps
+from ground_truth import GroundTruth
+import os
+from visual_odometry_base import VoState, VisualOdometryBase
+import time
 
 
 kVerbose=True     
@@ -50,13 +52,14 @@ kAbsoluteScaleThresholdIndoor = 0.015          # absolute translation scale; it 
 # With this very basic approach, you need to use a ground truth in order to recover a reasonable inter-frame scale $s$ and estimate a 
 # valid trajectory by composing $C_k = C_{k-1} * [R_{k-1,k}, s t_{k-1,k}]$. 
 class VisualOdometryEducational(VisualOdometryBase):
-    def __init__(self, cam: Camera, groundtruth: GroundTruth, feature_tracker: FeatureTracker):
+    def __init__(self, cam: Camera, groundtruth: GroundTruth, feature_tracker: FeatureTracker, save_loc=None):
         super().__init__(cam=cam, groundtruth=groundtruth)      
         
         self.kps_ref = None  # reference keypoints 
         self.des_ref = None # refeference descriptors 
         self.kps_cur = None  # current keypoints 
         self.des_cur = None # current descriptors 
+        self.save_loc = save_loc
             
         self.feature_tracker = feature_tracker  # type: FeatureTracker
         
@@ -125,7 +128,7 @@ class VisualOdometryEducational(VisualOdometryBase):
         print(f'num inliers in pose estimation: {self.pose_estimation_inliers}')
         return R,t  # Rrc, trc (with respect to 'ref' frame) 		
 
-    def process_first_frame(self, frame_id) -> None:
+    def process_first_frame(self, frame_id, mask=None) -> None:
         # convert image to gray if needed    
         if self.cur_image.ndim>2:
             self.cur_image = cv2.cvtColor(self.cur_image,cv2.COLOR_RGB2GRAY)                
@@ -134,23 +137,78 @@ class VisualOdometryEducational(VisualOdometryBase):
         # convert from list of keypoints to an array of points 
         self.kps_ref = np.array([x.pt for x in self.kps_ref], dtype=np.float32) if self.kps_ref is not None else None
         self.draw_img = self.drawFeatureTracks(self.cur_image)
+        return self.kps_ref, self.des_ref
+    
+    def filterKPS(self, kps, mask):
+        mask_idxs = []
+        for i in kps:
+            col = int(i[0])
+            row = int(i[1])
+            if mask[row][col]==True:
+                mask_idxs.append(False)
+            else:
+                mask_idxs.append(True)
+        return mask_idxs
 
-    def process_frame(self, frame_id) -> None:
-        # convert image to gray if needed    
+    def process_frame(self, frame_id, mask=None) -> None:
+        # convert image to gray if needed   
         if self.cur_image.ndim>2:
             self.cur_image = cv2.cvtColor(self.cur_image,cv2.COLOR_RGB2GRAY)                
         # track features 
         self.timer_feat.start()
-        self.track_result = self.feature_tracker.track(self.prev_image, self.cur_image, self.kps_ref, self.des_ref)
+
+        # if mask is not None:
+        #     kmask = self.filterKPS(self.kps_ref, mask)
+        #     print(f"KP before filtering: {self.kps_ref.shape[0]}")
+        #     self.kps_ref = self.kps_ref[kmask]
+        #     print(f"KP after filtering: {self.kps_ref.shape[0]}")
+
+        self.track_result = self.feature_tracker.track(self.prev_image, self.cur_image, self.kps_ref, self.des_ref, mask)
         self.timer_feat.refresh()
         # estimate pose 
         self.timer_pose_est.start()
-        R, t = self.estimatePose(self.track_result.kps_ref_matched, self.track_result.kps_cur_matched)     
+        est_start = time.perf_counter()
+        R, t = self.estimatePose(self.track_result.kps_ref_matched, self.track_result.kps_cur_matched)  
+        est_end = time.perf_counter()   
+        total_est_time = est_end - est_start
         self.timer_pose_est.refresh()
         # update keypoints history  
         self.kps_ref = self.track_result.kps_ref
         self.kps_cur = self.track_result.kps_cur
         self.des_cur = self.track_result.des_cur 
+
+        # draw mask as green and kps as red
+        new_img = self.cur_image.copy()
+        new_img = cv2.cvtColor(new_img, cv2.COLOR_GRAY2RGB)
+        if mask is not None and self.save_loc is not None:
+            for i in range(mask.shape[0]):
+                for j in range(mask.shape[1]):
+                    try:
+                        if mask[i][j] == True:
+                            new_img[i][j] = [0, 255, 0]
+                        else:
+                            pass
+                    except Exception as e:
+                        print(f"Error at {i}, {j} {e}")
+
+            if self.track_result.kps_before_mask is not None:
+                for i in self.track_result.kps_before_mask:
+                    col = int(i[0])
+                    row = int(i[1])
+                    cv2.circle(new_img, (col, row), 2, (0, 0, 255), -1)
+
+            if self.track_result.kps_after_mask is not None:
+                for i in self.track_result.kps_after_mask:
+                    col = int(i[0])
+                    row = int(i[1])
+                    cv2.circle(new_img, (col, row), 2, (255, 0, 0), -1)
+
+
+
+            res_file = os.path.join(self.save_loc, f'res_{frame_id}.png')
+            cv2.imwrite(res_file, new_img)
+
+
         self.num_matched_kps = self.kpn_ref.shape[0] 
         self.num_inliers =  np.sum(self.mask_match)
         #compute average delta pixel shift
@@ -185,6 +243,7 @@ class VisualOdometryEducational(VisualOdometryBase):
                 print('# new detected points: ', self.kps_cur.shape[0])                  
         self.kps_ref = self.kps_cur
         self.des_ref = self.des_cur
+        return self.num_matched_kps, self.num_inliers, self.average_pixel_shift, self.kpn_cur, self.des_cur, R, t, self.track_result.kps_before_mask, self.track_result.kps_after_mask, total_est_time
         
 
     def drawFeatureTracks(self, img, reinit = False):

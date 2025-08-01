@@ -26,8 +26,7 @@ import glob
 import time 
 import csv
 import re 
-import ujson as json
-
+import torch
 from multiprocessing import Process, Queue, Value 
 from pyslam.semantics.semantic_utils import SemanticDatasetType
 from pyslam.utilities.utils_sys import Printer
@@ -39,11 +38,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pyslam.config import Config # Only imported when type checking, not at runtime
 
+import matplotlib.pyplot as plt
 
 kScriptPath = os.path.realpath(__file__)
 kScriptFolder = os.path.dirname(kScriptPath)
 kRootFolder = kScriptFolder + '/../..'
 kSettingsFolder = kRootFolder + '/settings'
+
 
 
 # Base class for implementing datasets
@@ -99,22 +100,22 @@ class Dataset(object):
                 Printer.yellow(f'Dataset end: {self.name}, path: {self.path}, frame id: {frame_id}')
                 self.is_ok = False
             return None
-        try: 
-            img = self.getImage(frame_id)
-            if img is None:
-                return None
-            if img.ndim == 2:
-                return np.ascontiguousarray(cv2.cvtColor(img,cv2.COLOR_GRAY2RGB))     
-            else:
-                return np.ascontiguousarray(img)             
-        except:
-            img = None
-            self.is_ok = False
-            if self.num_frames is not None and frame_id >= self.num_frames:
-                Printer.yellow(f'Dataset end: {self.name}, path: {self.path}, frame id: {frame_id}')
-            else:    
-                Printer.red(f'Cannot open dataset: {self.name}, path: {self.path}, frame id: {frame_id}')
-            return np.ascontiguousarray(img) if img is not None else None
+        # try: 
+        img,mask = self.getImage(frame_id)
+        if img is None:
+            return None
+        if img.ndim == 2:
+            return cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)     
+        else:
+            return img,mask             
+        # except:
+        #     img = None
+        #     self.is_ok = False
+        #     if self.num_frames is not None and frame_id >= self.num_frames:
+        #         Printer.yellow(f'Dataset end: {self.name}, path: {self.path}, frame id: {frame_id}')
+        #     else:    
+        #         Printer.red(f'Cannot open dataset: {self.name}, path: {self.path}, frame id: {frame_id}')
+        #     return img    
         
     # Adjust frame id with start frame id only here
     def getImageColorRight(self, frame_id):
@@ -197,7 +198,8 @@ class VideoDataset(Dataset):
         self.fps = float(self.cap.get(cv2.CAP_PROP_FPS))
         self.Ts = 1.0 / self.fps if self.fps > 0 else 0 
         self.i = 0           
-        self.is_init = False           
+        self.is_init = False        
+        self.skip = 1   
         print(f"VideoDataset: {self.filename}")
         print(f"VideoDataset: Number of frames: {self.num_frames}, FPS: {self.fps}")            
             
@@ -296,15 +298,11 @@ class FolderDataset(Dataset):
         if self.timestamps is not None:
             # read timestamps from timestamps file
             self._timestamp = float(self.timestamps[self.i])
-            if self.i < len(self.timestamps) - 1:
-                self._next_timestamp = float(self.timestamps[self.i + 1])
-            else:
-                self._next_timestamp = self._timestamp + self.Ts            
-
+            self._next_timestamp = float(self.timestamps[self.i + 1])
         elif pattern.search(image_file.split('/')[-1].split('.')[0]):
             # read timestamps from image filename
-            self._timestamp = float(image_file.split('/')[-1].split('.')[0])
-            self._next_timestamp = float(self.listing[self.i + 1].split('/')[-1].split('.')[0])
+            self._timestamp = float(image_file.split('/')[-1].split('.')[0].split('_')[-1])
+            self._next_timestamp = float(self.listing[self.i + 1].split('/')[-1].split('.')[0].split('_')[-1])
         else:
             self._timestamp += self.Ts
             self._next_timestamp = self._timestamp + self.Ts 
@@ -437,7 +435,7 @@ class Webcam(object):
 
 
 class KittiDataset(Dataset):
-    def __init__(self, path, name, sensor_type=SensorType.STEREO, associations=None, start_frame_id=0, type=DatasetType.KITTI): 
+    def __init__(self, path, name, top_k=85, mask_name='mc_trails_50', eval_expr='prob_norm*(1-var_norm)', sensor_type=SensorType.STEREO, associations=None, start_frame_id=0, type=DatasetType.KITTI): 
         super().__init__(path, name, sensor_type, 10, associations, start_frame_id, type)
         self.environment_type = DatasetEnvironmentType.OUTDOOR
         if sensor_type != SensorType.MONOCULAR and sensor_type != SensorType.STEREO:
@@ -446,10 +444,17 @@ class KittiDataset(Dataset):
         if sensor_type == SensorType.STEREO:
             self.scale_viewer_3d = 1          
         self.image_left_path = '/image_0/'
-        self.image_right_path = '/image_1/'           
+        self.image_right_path = '/image_1/'
+        self.mask_path = '/mask/'        
         self.timestamps = np.loadtxt(self.path + '/sequences/' + str(self.name) + '/times.txt', dtype=np.float64)
         self.max_frame_id = len(self.timestamps)
         self.num_frames = self.max_frame_id
+        self.prob_thresh = 0.05
+        self.var_thresh = 0.01
+        self.top_k = top_k
+        self.mask_name = mask_name
+        self.eval_expr = eval_expr
+
         print('Processing KITTI Sequence of lenght: ', len(self.timestamps))
         
     def set_is_color(self,val):
@@ -457,22 +462,118 @@ class KittiDataset(Dataset):
         if self.is_color:
             print('dataset in color!')            
             self.image_left_path = '/image_2/'
-            self.image_right_path = '/image_3/'                           
+            self.image_right_path = '/image_3/' 
+
+    def top_k_percent_mask(self, prob_np, var_np, k=85):
+        prob_norm = (prob_np - prob_np.min()) / (prob_np.max() - prob_np.min() + 1e-6)
+        var_norm = (var_np - var_np.min()) / (var_np.max() - var_np.min() + 1e-6)
+        # score = prob_norm * (1 - var_norm)
+        # score = prob_norm
+        print(f"Eval expr:", self.eval_expr)
+        score = eval(self.eval_expr)
+        thresh = np.percentile(score, 100 - k)
+        mask = (score >= thresh).astype(np.uint8)
+
+        return mask
+                          
         
     def getImage(self, frame_id):
         img = None
         if frame_id < self.max_frame_id:
             try: 
                 img = cv2.imread(self.path + '/sequences/' + self.name + self.image_left_path + str(frame_id).zfill(6) + '.png')
+                # img = img[self.crop_list[0]:-self.crop_list[2],self.crop_list[3]:-self.crop_list[1]]
+                # print(f"Image:{img.shape}")
+                row_start = self.crop_list[0]
+                row_end = img.shape[0]-self.crop_list[2]
+                col_start = self.crop_list[3]
+                col_end = img.shape[1]-self.crop_list[1]
+                img = img[row_start:row_end,col_start:col_end]
+                print(f"Image:{img.shape}")
                 self._timestamp = self.timestamps[frame_id]
             except:
                 print('could not retrieve image: ', frame_id, ' in path ', self.path )
+
+            try:
+                mask_loc = os.path.join(self.path,'masks', self.mask_name)
+                print(f"Loaded mask {mask_loc} for frame {frame_id}")
+                # got_mask = False
+                got_prob = False
+                got_std = False
+                prob_path1 = os.path.join(mask_loc, f'{frame_id}_prob.npy')
+                prob_path2 = os.path.join(mask_loc, f'{frame_id}_probs.npy')
+                prob_path3 = os.path.join(mask_loc, f'prob_{frame_id}.npy')
+                prob_path4 = os.path.join(mask_loc, f'probs_{frame_id}.npy')
+                std_path1 = os.path.join(mask_loc, f'{frame_id}_var.npy')
+                std_path2 = os.path.join(mask_loc, f'{frame_id}_vars.npy')
+                std_path3 = os.path.join(mask_loc, f'var_{frame_id}.npy')
+                std_path4 = os.path.join(mask_loc, f'vars_{frame_id}.npy')
+                
+                if os.path.exists(prob_path1):
+                    prob_mask = np.load(prob_path1)
+                    got_prob = True
+                elif os.path.exists(prob_path2):
+                    prob_mask = np.load(prob_path2)
+                    got_prob = True
+                elif os.path.exists(prob_path3):
+                    prob_mask = np.load(prob_path3)
+                    got_prob = True
+                elif os.path.exists(prob_path4):
+                    prob_mask = np.load(prob_path4)
+                    got_prob = True
+                
+                if os.path.exists(std_path1):
+                    std_mask = np.load(std_path1)
+                    got_std = True
+                elif os.path.exists(std_path2):
+                    std_mask = np.load(std_path2)
+                    got_std = True
+                elif os.path.exists(std_path3):
+                    std_mask = np.load(std_path3)
+                    got_std = True
+                elif os.path.exists(std_path4):
+                    std_mask = np.load(std_path4)
+                    got_std = True
+                
+                if got_prob and got_std:
+                    # prob_file = os.path.join(mask_loc, f'{frame_id}_prob.npy')
+                    # std_file = os.path.join(mask_loc, f'{frame_id}_var.npy')
+                
+                    # prob_mask = np.load(prob_file)
+                    # std_mask = np.load(std_file)
+
+                    # get all probs greater than threshold
+                    prob_map = np.where(prob_mask < self.prob_thresh, 1, 0)
+                    std_map = np.where(std_mask > self.var_thresh, 1, 0)
+
+                    # count number of true values in prob_map
+                    prob_count = np.count_nonzero(prob_map)
+                    std_count = np.count_nonzero(std_map)
+                    # print(f'prob_count: {prob_count}, std_count: {std_count}')
+
+                    # mask = np.logical_and(prob_map, std_map)
+                    mask = self.top_k_percent_mask(prob_mask, std_mask, self.top_k)
+                else:
+                    raise FileNotFoundError(f"Mask files not found for frame {frame_id} in {mask_loc}")
+            except Exception as e:
+                print('could not retrieve mask: ', frame_id, ' in path ', self.path, '|', e )
+                mask = None
+
+            # img_temp = img.copy()
+            # img_temp[mask] = [0, 255, 0]
+            # cv2.imwrite(f'/home/moog-2/pixer/pyslam/{kResultsFolder}/frame_{frame_id}.png', img_temp)
+
+            # print(f'prob_mask: {prob_mask.shape}, std_mask: {std_mask.shape}, mask: {mask.shape}')
+            # except:
+            #     mask = None
+
+
             if frame_id+1 < self.max_frame_id:   
                 self._next_timestamp = self.timestamps[frame_id+1]
             else:
                 self._next_timestamp = self._timestamp + self.Ts             
         self.is_ok = (img is not None)
-        return np.ascontiguousarray(img) if img is not None else None
+        return img, mask 
 
     def getImageRight(self, frame_id):
         print(f'[KittiDataset] getImageRight: {frame_id}')

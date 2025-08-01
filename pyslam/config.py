@@ -34,11 +34,14 @@ from pyslam.utilities.utils_sys import Printer, locally_configure_qt_environment
 # N.B.: this file must stay in the root folder of the repository 
 
 
-kScriptPath = os.path.realpath(__file__)
-kScriptFolder = os.path.dirname(kScriptPath)
-kRootFolder = os.path.join(kScriptFolder, '..')  # root folder of the repository
-kDefaultConfigPath = os.path.join(kRootFolder, 'config.yaml')
-kDefaultConfigLibsPath = os.path.join(kRootFolder, 'config_libs.yaml')
+# get the folder location of this file!
+kThisFileLocation = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
+kRootFolder = kThisFileLocation
+import os
+config_file = os.environ.get('PYSLAM_CONFIG','config.yaml')
+# kDefaultConfigPath = os.path.join(kRootFolder,'config.yaml')
+kDefaultConfigPath = os.path.join(kRootFolder, config_file)
+kDefaultConfigLibsPath = os.path.join(kRootFolder,'config_libs.yaml')
 
 # Class for reading libs, dataset, system, and camera settings (from config.yaml) from yaml files.
 # Input: 

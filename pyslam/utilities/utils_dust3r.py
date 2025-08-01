@@ -20,7 +20,7 @@
 import cv2
 import numpy as np
 import torchvision.transforms as tvf
-import trimesh
+# import trimesh
 import torch
 
 from .utils_torch import to_numpy
