@@ -97,25 +97,26 @@ class VisualOdometryBase:
     def process_first_frame(self, frame_id) -> None:
         pass
 
-    def process_frame(self, frame_id) -> None:
+    def process_frame(self, frame_id, mask=None) -> None:
         pass
 
-    def track(self, img, img_right, depth, frame_id, timestamp) -> None:
+    def track(self, img, depth, frame_id, timestamp,mask=None) -> None:
         if kVerbose:
             print('..................................')
             print(f'frame: {frame_id}, timestamp: {timestamp}')       
         # check coherence of image size with camera settings 
-        assert(img.shape[0]==self.cam.height and img.shape[1]==self.cam.width), "Frame: provided image has not the same size as the camera model or image is not grayscale"
+        # assert(img.shape[0]==self.cam.height and img.shape[1]==self.cam.width), "Frame: provided image has not the same size as the camera model or image is not grayscale"
         self.cur_image = img
         self.cur_image_right = img_right
         self.cur_depth = depth
         self.cur_timestamp = timestamp
+        a,b,c,d,e,r,t,kp_b,kp_a, est_time = None, None, None, None, None, None, None, None, None, None
         # manage and check stage 
         if(self.state == VoState.GOT_FIRST_IMAGE):
-            self.process_frame(frame_id)
+            a,b,c,d,e,r,t,kp_b,kp_a, est_time = self.process_frame(frame_id,mask)
             self.update_history()   
         elif(self.state == VoState.NO_IMAGES_YET):
-            self.process_first_frame(frame_id)
+            d,e = self.process_first_frame(frame_id)
             self.state = VoState.GOT_FIRST_IMAGE            
         self.prev_image = self.cur_image 
         self.prev_image_right = self.cur_image_right   
@@ -123,6 +124,7 @@ class VisualOdometryBase:
         self.prev_timestamp = self.cur_timestamp
         # update main timer (for profiling)
         self.timer_main.refresh()  
+        return a,b,c,d,e,r,t, kp_b,kp_a, est_time
          
 
     def update_history(self) -> None:
