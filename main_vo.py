@@ -252,11 +252,12 @@ def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_
 
         
 
+    xs_p = xs[::traj_skips]
+    zs_p = zs[::traj_skips]
+    gtxs_p = gtxs[::traj_skips]
+    gtzs_p = gtzs[::traj_skips]
+    
     if plot_traj:
-        xs_p = xs[::traj_skips]
-        zs_p = zs[::traj_skips]
-        gtxs_p = gtxs[::traj_skips]
-        gtzs_p = gtzs[::traj_skips]
         plt.figure(figsize=(12, 12))
         plt.plot(xs_p, zs_p, c='tab:red', label='estimated')
         plt.plot(gtxs_p, gtzs_p, c='tab:green', label='ground truth')
@@ -270,12 +271,12 @@ def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_
         plt.savefig(f"{kResultsFolder}/{exp_name}_2d.png")
         plt.close()
 
-        with open(f'{kResultsFolder}/{exp_name}_trajectory.csv', 'w') as f:
-            print(f"saving {kResultsFolder}/{exp_name}_2d.csv with {len(xs)} points")
-            f.write(f'i,x,y,z,gtx,gty,gtz\n')
-            for i in range(len(xs)):
-                # f.write(f'{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
-                f.write(f'{i},{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
+    with open(f'{kResultsFolder}/{exp_name}_trajectory.csv', 'w') as f:
+        print(f"saving {kResultsFolder}/{exp_name}_2d.csv with {len(xs)} points")
+        f.write(f'i,x,y,z,gtx,gty,gtz\n')
+        for i in range(len(xs)):
+            # f.write(f'{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
+            f.write(f'{i},{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
 
     return
     
@@ -291,7 +292,8 @@ def run_exp(
     baseline=False, 
     save_intermediate=False, 
     plot_tracks=False, 
-    plot_traj=True
+    plot_traj=True,
+    mpl_flag=False
     ):
     config_loc = os.environ.get('PYSLAM_CONFIG')
     config_name = config_loc.split('.')[0]
@@ -573,11 +575,11 @@ if __name__ == "__main__":
 
     features = [
         ['LK_SHI_TOMASI', FeatureTrackerConfigs.LK_SHI_TOMASI],
-        # ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
-        # ['ORB', FeatureTrackerConfigs.ORB],
-        # ['BRISK', FeatureTrackerConfigs.BRISK],
-        # ['AKAZE', FeatureTrackerConfigs.AKAZE],
-        # ['SIFT', FeatureTrackerConfigs.SIFT],
+        ['LK_FAST', FeatureTrackerConfigs.LK_FAST],
+        ['ORB', FeatureTrackerConfigs.ORB],
+        ['BRISK', FeatureTrackerConfigs.BRISK],
+        ['AKAZE', FeatureTrackerConfigs.AKAZE],
+        ['SIFT', FeatureTrackerConfigs.SIFT],
         
         # ['SUPERPOINT', FeatureTrackerConfigs.SUPERPOINT],
         # ['R2D2', FeatureTrackerConfigs.R2D2],
@@ -589,10 +591,10 @@ if __name__ == "__main__":
 
     feature_nums = [
         3000,
-        # 2000,
+        2000,
         # 1500,
         # 1000,
-        # 500,
+        500,
         # 400,
         # 100
     ]
@@ -603,20 +605,20 @@ if __name__ == "__main__":
     ]
 
     # top_ks = np.arange(100, -1, -20, dtype=int).tolist()
-    # top_ks = [0,25,33,50,66]
-    top_ks = [25]
+    top_ks = [0,25,33,50,66]
+    # top_ks = [25]
 
     mask_loc = [
-        ['mc_trials_50',9,9,9,9],
+        ['mc_trials_50',0,0,0,0],
         ['moped_uh_25000_mse_mc100_iter25000',0,0,0,0],
-        ['mc_trials_100',9,9,9,9],
+        ['mc_trials_100',0,0,0,0],
         ['moped_uh_25000_mse_mc25_iter25000',0,0,0,0]
     ]
     
     expressions = [
-        # 'prob_norm',
+        'prob_norm',
         '1-var_norm',
-        # 'prob_norm*(1-var_norm)'
+        'prob_norm*(1-var_norm)'
     ]
 
     max_images = 1000
@@ -629,11 +631,12 @@ if __name__ == "__main__":
                         for k in top_ks:
                             try:
                                 if not baseline and k >= 0:
-                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
+                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False, plot_traj=False)
                                 elif baseline and k==0:
-                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False)
+                                    run_exp(f[0], f[1], num, max_images, k, mask_l,[e_idx,exp], baseline, save_intermediate=False, plot_tracks=False, plot_traj=False)
                                 else:
                                     print(f'Skipping {f[0]} with num {num} and top_k {k} for baseline {baseline}')
+                                
                             except Exception as e:
                                 config= os.environ.get('PYSLAM_CONFIG')
                                 config_name = config.split('.')[0]

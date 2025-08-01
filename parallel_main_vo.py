@@ -96,7 +96,7 @@ def factory_plot2d(*args,**kwargs):
     else:
         return Mplot2d(*args,**kwargs)
     
-def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_traj=True, traj_skips=1):
+def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_traj=False, traj_skips=1):
 
     exp_name = results['exp_name']
     name = results['feature_name']
@@ -251,13 +251,13 @@ def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_
         with open(f'{kResultsFolder}/{exp_name}_tracks.pkl', 'wb') as f:
             pickle.dump(tracks, f)
 
-        
+
+    xs_p = xs[::traj_skips]
+    zs_p = zs[::traj_skips]
+    gtxs_p = gtxs[::traj_skips]
+    gtzs_p = gtzs[::traj_skips]        
 
     if plot_traj:
-        xs_p = xs[::traj_skips]
-        zs_p = zs[::traj_skips]
-        gtxs_p = gtxs[::traj_skips]
-        gtzs_p = gtzs[::traj_skips]
         plt.figure(figsize=(12, 12))
         plt.plot(xs_p, zs_p, c='tab:red', label='estimated')
         plt.plot(gtxs_p, gtzs_p, c='tab:green', label='ground truth')
@@ -271,12 +271,12 @@ def process_data(results: dict, images=None,masks=None, draw_tracks=False, plot_
         plt.savefig(f"{kResultsFolder}/{exp_name}_2d.png")
         plt.close()
 
-        with open(f'{kResultsFolder}/{exp_name}_trajectory.csv', 'w') as f:
-            print(f"saving {kResultsFolder}/{exp_name}_2d.csv with {len(xs)} points")
-            f.write(f'i,x,y,z,gtx,gty,gtz\n')
-            for i in range(len(xs)):
-                # f.write(f'{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
-                f.write(f'{i},{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
+    with open(f'{kResultsFolder}/{exp_name}_trajectory.csv', 'w') as f:
+        print(f"saving {kResultsFolder}/{exp_name}_2d.csv with {len(xs)} points")
+        f.write(f'i,x,y,z,gtx,gty,gtz\n')
+        for i in range(len(xs)):
+            # f.write(f'{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
+            f.write(f'{i},{xs[i]},{ys[i]},{zs[i]},{gtxs[i]},{gtys[i]},{gtzs[i]}\n')
 
     return
     
@@ -292,7 +292,7 @@ def run_exp(
     baseline=False, 
     save_intermediate=False, 
     plot_tracks=False, 
-    plot_traj=True
+    plot_traj=False
     ):
     config_loc = os.environ.get('PYSLAM_CONFIG')
     config_name = config_loc.split('.')[0]
@@ -584,11 +584,11 @@ if __name__ == "__main__":
     feature_nums = [
         3000,
         2000,
-        1500,
-        1000,
-        500,
+        # 1500,
+        # 1000,
+        # 500,
         400,
-        100
+        # 100
     ]
 
     baselines = [
@@ -601,9 +601,9 @@ if __name__ == "__main__":
     # top_ks = [0]
 
     mask_loc = [
-        ['mc_trials_50',9,9,9,9],
+        ['mc_trials_50',0,0,0,0],
         ['moped_uh_25000_mse_mc100_iter25000',0,0,0,0],
-        ['mc_trials_100',9,9,9,9],
+        ['mc_trials_100',0,0,0,0],
         ['moped_uh_25000_mse_mc25_iter25000',0,0,0,0]
     ]
     
@@ -649,5 +649,5 @@ if __name__ == "__main__":
 
     print(f'Total tasks: {len(tasks)}')
 
-    # with multiprocessing.Pool(processes=4) as pool:
-    #     pool.map(run_wrapper, tasks)
+    with multiprocessing.Pool(processes=4) as pool:
+        pool.map(run_wrapper, tasks)
